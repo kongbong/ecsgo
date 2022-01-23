@@ -2,8 +2,8 @@ package ecsgo
 
 // Registry main struct where has entities, systems and storages
 type Registry struct {
-	entities []EntityVer
-	freelist []EntityVer
+	entities []Entity
+	freelist []Entity
 	tables   []itable
 	pipeline *pipeline
 }
@@ -16,29 +16,29 @@ func New() *Registry {
 }
 
 // Create entity
-func (r *Registry) Create() EntityVer {
+func (r *Registry) Create() Entity {
 	if len(r.freelist) > 0 {
 		ent := r.freelist[len(r.freelist)-1]
 		r.freelist = r.freelist[:len(r.freelist)-1]
-		ent.SetVersion(ent.ToVersion() + 1)
-		r.entities[uint32(ent.ToEntity())] = ent
+		ent.SetVersion(ent.version + 1)
+		r.entities[ent.id] = ent
 		return ent
 	}
-	ent := newEntity(Entity(len(r.entities)), 1)
+	ent := newEntity(uint32(len(r.entities)), 1)
 	r.entities = append(r.entities, ent)
 	return ent
 }
 
 // IsAlive checks entity is in Registry
-func (r *Registry) IsAlive(e EntityVer) bool {
-	return r.entities[uint32(e.ToEntity())] == e
+func (r *Registry) IsAlive(e Entity) bool {
+	return r.entities[uint32(e.id)] == e
 }
 
 // Release remove entity from Registry
-func (r *Registry) Release(e EntityVer) {
-	old := &r.entities[uint32(e.ToEntity())]
+func (r *Registry) Release(e Entity) {
+	old := &r.entities[uint32(e.id)]
 	if *old == e {
-		old.SetVersion(old.ToVersion() + 1)
+		old.SetVersion(old.version + 1)
 		r.freelist = append(r.freelist, *old)
 	}
 }

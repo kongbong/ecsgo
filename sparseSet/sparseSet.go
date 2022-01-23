@@ -1,33 +1,35 @@
 package sparseSet
 
+import "log"
+
 // Set sparseSet
 type Set[T any] struct {
-	dense []T
-	sparse []uint32
-	freelist []uint32
+	denseMap      []uint32
+	dense         []T
+	sparse        []uint32
 	autoincresing bool
 }
 
 func New[T any](maxValue uint32) *Set[T] {
 	return &Set[T]{
-		sparse: make([]uint32, maxValue),
+		sparse: make([]uint32, maxValue+1),
 		autoincresing: false,
 	}
 }
 
 func NewAutoIncresing[T any](maxValue uint32) *Set[T] {
 	return &Set[T]{
-		sparse: make([]uint32, maxValue),
+		sparse: make([]uint32, maxValue+1),
 		autoincresing: true,
 	}
 }
 
-func (s *Set[T]) NewSize(sz uint32) {
-	if len(s.sparse) >= int(sz) {
+func (s *Set[T]) newMaxValue(maxValue uint32) {
+	if len(s.sparse) >= int(maxValue+1) {
 		panic("only increasing is possible")
 	}
 
-	newSparse := make([]uint32, sz)
+	newSparse := make([]uint32, maxValue+1)
 	copy(newSparse, s.sparse[:])
 	s.sparse = newSparse
 }
@@ -40,33 +42,33 @@ func (s *Set[T]) InsertVal(id uint32, val T) bool {
 func (s *Set[T]) Insert(id uint32, val *T) bool {
 	if int(id) >= len(s.sparse) {
 		if s.autoincresing {
-			newSize := uint32(len(s.sparse)*2)
-			if newSize < id {
-				newSize = id+1
+			newMaxValue := uint32(len(s.sparse)*2)
+			if newMaxValue < id {
+				newMaxValue = id+1
 			}
-			s.NewSize(newSize)
+			s.newMaxValue(newMaxValue)
 		} else {
+			log.Println("exceeing maxvalue")
 			return false
 		}
 	}
 	if s.sparse[id] != 0 {
 		// already inserted
+		log.Println("already inserted", id)
 		return false
 	}
-	if len(s.freelist) > 0 {
-		// recycle
-		last := s.freelist[len(s.freelist)-1]
-		s.freelist = s.freelist[:len(s.freelist)-1]
-		s.sparse[id] = last
-		s.dense[last-1] = *val
-		return true
-	}
+
 	s.dense = append(s.dense, *val)
+	s.denseMap = append(s.denseMap, id)
 	s.sparse[id] = uint32(len(s.dense))
 	return true
 }
 
 func (s *Set[T]) Find(id uint32) *T {
+	if int(id) >= len(s.sparse) {
+		// exceed maxValue
+		return nil
+	}
 	idx := s.sparse[id]
 	if idx == 0 || int(idx) > len(s.dense) {
 		// not inserted
@@ -76,18 +78,30 @@ func (s *Set[T]) Find(id uint32) *T {
 }
 
 func (s *Set[T]) Erase(id uint32) {
+	if s.Find(id) == nil {
+		// not inserted
+		return
+	}
+
 	idx := s.sparse[id]
 	s.sparse[id] = 0
-	if idx == 0 || int(idx) > len(s.dense) {
-		// already removed
-		return
-	}	
-	s.freelist = append(s.freelist, idx)
+	last := s.dense[len(s.dense)-1]
+	lastSparse := s.denseMap[len(s.denseMap)-1]
+
+	if int(idx) < len(s.dense) {
+		// removed last element, don't need to swap
+		s.dense[idx-1] = last
+		s.denseMap[idx-1] = lastSparse
+		s.sparse[lastSparse] = idx
+	}
+	
+	s.dense = s.dense[:len(s.dense)-1]
+	s.denseMap = s.denseMap[:len(s.denseMap)-1]
 }
 
 func (s *Set[T]) Clear() {
 	s.dense = s.dense[:0]
-	s.freelist = s.freelist[:0]
+	s.denseMap = s.denseMap[:0]
 }
 
 func (s *Set[T]) Iterate() []T {

@@ -9,7 +9,7 @@ type isystem interface {
 }
 
 // AddSystem1 add single value system
-func AddSystem1[T any](r *Registry, fn func (entity EntityVer, t *T)) {
+func AddSystem1[T any](r *Registry, fn func (entity Entity, t *T)) {
 	r.addsystem(&system1[T]{
 		r: r,
 		fn: fn,
@@ -19,7 +19,7 @@ func AddSystem1[T any](r *Registry, fn func (entity EntityVer, t *T)) {
 // system1 single value system
 type system1[T any] struct {
 	r *Registry
-	fn func (EntityVer, *T)
+	fn func (Entity, *T)
 }
 
 // query1 find tables where has type T value
@@ -42,6 +42,9 @@ func (s *system1[T]) run() {
 	tables := query1[T](s.r)
 	for _, t := range tables {
 		for iter := t.iterator(); iter.next(); {
+			if !s.r.IsAlive(iter.entity()) {
+				continue
+			}			
 			ptrT := iter.get(reflect.TypeOf(zeroT)).(*T)
 			s.fn(iter.entity(), ptrT)
 		}
@@ -55,7 +58,7 @@ func (s *system1[T]) getCmpTypes() []reflect.Type {
 }
 
 // AddSystem2 add two values system
-func AddSystem2[T any, U any](r *Registry, fn func (entity EntityVer, t *T, u *U)) {
+func AddSystem2[T any, U any](r *Registry, fn func (entity Entity, t *T, u *U)) {
 	r.addsystem(&system2[T, U]{
 		r: r,
 		fn: fn,
@@ -65,7 +68,7 @@ func AddSystem2[T any, U any](r *Registry, fn func (entity EntityVer, t *T, u *U
 // system2 two values system
 type system2[T any, U any] struct {
 	r *Registry
-	fn func (EntityVer, *T, *U)
+	fn func (Entity, *T, *U)
 }
 
 // query2 find tables where has type T and U values
@@ -93,6 +96,9 @@ func (s *system2[T, U]) run() {
 	tables := query2[T, U](s.r)
 	for _, t := range tables {
 		for iter := t.iterator(); iter.next(); {
+			if !s.r.IsAlive(iter.entity()) {
+				continue
+			}	
 			ptrT := iter.get(reflect.TypeOf(zeroT)).(*T)
 			ptrU := iter.get(reflect.TypeOf(zeroU)).(*U)
 			s.fn(iter.entity(), ptrT, ptrU)

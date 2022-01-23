@@ -7,13 +7,13 @@ import (
 
 // elem1 table row element for single value
 type elem1[T any] struct {
-	entity EntityVer
+	entity Entity
 	v1 T
 }
 
 // elem2 table row element for two values
 type elem2[T any, U any] struct {
-	entity EntityVer
+	entity Entity
 	v1 T
 	v2 U
 }
@@ -45,8 +45,8 @@ func getOrAddTable1[T any](r *Registry) *table1[T] {
 } 
 
 // insert entity value into table
-func (t *table1[T]) insert(entity EntityVer, v *T) {
-	t.set.Insert(uint32(entity.ToEntity()), &elem1[T]{entity, *v})
+func (t *table1[T]) insert(entity Entity, v *T) {
+	t.set.Insert(uint32(entity.id), &elem1[T]{entity, *v})
 }
 
 // hasType type check if it has specific type value
@@ -69,8 +69,8 @@ type table2[T any, U any] struct {
 }
 
 // insert entity value into table
-func (t *table2[T, U]) insert(entity EntityVer, v1 *T, v2 *U) {
-	t.set.Insert(uint32(entity.ToEntity()), &elem2[T, U]{entity, *v1, *v2})
+func (t *table2[T, U]) insert(entity Entity, v1 *T, v2 *U) {
+	t.set.Insert(uint32(entity.id), &elem2[T, U]{entity, *v1, *v2})
 }
 
 // hasType type check if it has specific type value
@@ -107,7 +107,7 @@ func getOrAddTable2[T any, U any](r *Registry) *table2[T, U] {
 type iiter interface {
 	next() bool
 	get(t reflect.Type) interface{}
-	entity() EntityVer
+	entity() Entity
 }
 
 // iter1 single value iterator
@@ -132,7 +132,7 @@ func (i *iter1[T]) get(t reflect.Type) interface{} {
 }
 
 // entity current element entity
-func (i *iter1[T]) entity() EntityVer {
+func (i *iter1[T]) entity() Entity {
 	return i.elems[i.idx].entity
 }
 
@@ -162,6 +162,6 @@ func (i *iter2[T, U]) get(t reflect.Type) interface{} {
 }
 
 // entity current element entity
-func (i *iter2[T, U]) entity() EntityVer {
+func (i *iter2[T, U]) entity() Entity {
 	return i.elems[i.idx].entity
 }
