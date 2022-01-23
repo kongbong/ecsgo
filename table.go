@@ -2,7 +2,7 @@ package ecsgo
 
 import (
 	"reflect"
-	"ecsgo/sparseSet"
+	"github.com/kongbong/ecsgo/sparseSet"
 )
 
 // table has rows and columns
