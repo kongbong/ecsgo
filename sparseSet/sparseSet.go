@@ -77,11 +77,11 @@ func (s *Set[T]) Find(id uint32) *T {
 
 func (s *Set[T]) Erase(id uint32) {
 	idx := s.sparse[id]
+	s.sparse[id] = 0
 	if idx == 0 || int(idx) > len(s.dense) {
 		// already removed
 		return
-	}
-	s.sparse[id] = 0
+	}	
 	s.freelist = append(s.freelist, idx)
 }
 
