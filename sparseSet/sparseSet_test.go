@@ -7,7 +7,7 @@ import (
 )
 
 func TestSet(t *testing.T) {
-	sparse := New[int](10)
+	sparse := New[uint32, int](10)
 	sparse.InsertVal(5, 100)
 	sparse.InsertVal(1, 1000)
 
@@ -25,7 +25,7 @@ func TestSet(t *testing.T) {
 }
 
 func TestAutoIncresingSet(t *testing.T) {
-	sparse := NewAutoIncresing[int](5)
+	sparse := NewAutoIncresing[uint32, int](5)
 
 	for i := 0; i < 10; i++ {
 		assert.True(t, sparse.InsertVal(uint32(i), i*100))
@@ -37,7 +37,7 @@ func TestAutoIncresingSet(t *testing.T) {
 }
 
 func TestRemoveIterate(t *testing.T) {
-	sparse := New[int](10)
+	sparse := New[uint32, int](10)
 	sparse.InsertVal(5, 100)
 	sparse.Erase(5)
 
@@ -49,4 +49,17 @@ func TestRemoveIterate(t *testing.T) {
 	sparse.Erase(3)
 	sparse.Erase(5)
 	assert.Equal(t, 8, len(sparse.Iterate()))
+}
+
+func BenchmarkSet(b *testing.B) {
+	set := New[int, int](b.N)
+	for n := 0; n < b.N; n++ {
+		set.InsertVal(n, n*100)
+	}
+	for n := 0; n < b.N; n++ {
+		set.Find(n)
+	}
+	for n := 0; n < b.N; n++ {
+		set.Erase(n)
+	}
 }

@@ -1,48 +1,51 @@
 package sparseSet
 
-import "log"
+import (
+	"constraints"
+	"log"
+)
 
 // Set sparseSet
-type Set[T any] struct {
-	denseMap      []uint32
+type Set[K constraints.Integer, T any] struct {
+	denseMap      []K
 	dense         []T
-	sparse        []uint32
+	sparse        []K
 	autoincresing bool
 }
 
-func New[T any](maxValue uint32) *Set[T] {
-	return &Set[T]{
-		sparse: make([]uint32, maxValue+1),
+func New[K constraints.Integer, T any](maxValue K) *Set[K, T] {
+	return &Set[K, T]{
+		sparse: make([]K, maxValue+1),
 		autoincresing: false,
 	}
 }
 
-func NewAutoIncresing[T any](maxValue uint32) *Set[T] {
-	return &Set[T]{
-		sparse: make([]uint32, maxValue+1),
+func NewAutoIncresing[K constraints.Integer, T any](maxValue K) *Set[K, T] {
+	return &Set[K, T]{
+		sparse: make([]K, maxValue+1),
 		autoincresing: true,
 	}
 }
 
-func (s *Set[T]) newMaxValue(maxValue uint32) {
+func (s *Set[K, T]) newMaxValue(maxValue K) {
 	if len(s.sparse) >= int(maxValue+1) {
 		panic("only increasing is possible")
 	}
 
-	newSparse := make([]uint32, maxValue+1)
+	newSparse := make([]K, maxValue+1)
 	copy(newSparse, s.sparse[:])
 	s.sparse = newSparse
 }
 
 // for primitive type values
-func (s *Set[T]) InsertVal(id uint32, val T) bool {
+func (s *Set[K, T]) InsertVal(id K, val T) bool {
 	return s.Insert(id, &val)
 }
 
-func (s *Set[T]) Insert(id uint32, val *T) bool {
+func (s *Set[K, T]) Insert(id K, val *T) bool {
 	if int(id) >= len(s.sparse) {
 		if s.autoincresing {
-			newMaxValue := uint32(len(s.sparse)*2)
+			newMaxValue := K(len(s.sparse)*2)
 			if newMaxValue < id {
 				newMaxValue = id+1
 			}
@@ -60,11 +63,11 @@ func (s *Set[T]) Insert(id uint32, val *T) bool {
 
 	s.dense = append(s.dense, *val)
 	s.denseMap = append(s.denseMap, id)
-	s.sparse[id] = uint32(len(s.dense))
+	s.sparse[id] = K(len(s.dense))
 	return true
 }
 
-func (s *Set[T]) Find(id uint32) *T {
+func (s *Set[K, T]) Find(id K) *T {
 	if int(id) >= len(s.sparse) {
 		// exceed maxValue
 		return nil
@@ -77,7 +80,7 @@ func (s *Set[T]) Find(id uint32) *T {
 	return &s.dense[idx-1]
 }
 
-func (s *Set[T]) Erase(id uint32) {
+func (s *Set[K, T]) Erase(id K) {
 	if s.Find(id) == nil {
 		// not inserted
 		return
@@ -99,11 +102,12 @@ func (s *Set[T]) Erase(id uint32) {
 	s.denseMap = s.denseMap[:len(s.denseMap)-1]
 }
 
-func (s *Set[T]) Clear() {
+func (s *Set[K, T]) Clear() {
 	s.dense = s.dense[:0]
 	s.denseMap = s.denseMap[:0]
+	s.sparse = make([]K, len(s.sparse))
 }
 
-func (s *Set[T]) Iterate() []T {
+func (s *Set[K, T]) Iterate() []T {
 	return s.dense
 }

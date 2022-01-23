@@ -26,7 +26,7 @@ type itable interface {
 
 // table1 single value table
 type table1[T any] struct {
-	set *sparseSet.Set[elem1[T]]
+	set *sparseSet.Set[uint32, elem1[T]]
 }
 
 // getOrAddTable1 making single value table
@@ -38,7 +38,7 @@ func getOrAddTable1[T any](r *Registry) *table1[T] {
 		}
 	}
 	t := &table1[T]{
-		set: sparseSet.NewAutoIncresing[elem1[T]](100),
+		set: sparseSet.NewAutoIncresing[uint32, elem1[T]](100),
 	}
 	r.tables = append(r.tables, t)
 	return t
@@ -46,7 +46,7 @@ func getOrAddTable1[T any](r *Registry) *table1[T] {
 
 // insert entity value into table
 func (t *table1[T]) insert(entity Entity, v *T) {
-	t.set.Insert(uint32(entity.id), &elem1[T]{entity, *v})
+	t.set.Insert(entity.id, &elem1[T]{entity, *v})
 }
 
 // hasType type check if it has specific type value
@@ -65,12 +65,12 @@ func (t *table1[T]) iterator() iiter {
 
 // table2 two values table
 type table2[T any, U any] struct {
-	set *sparseSet.Set[elem2[T, U]]
+	set *sparseSet.Set[uint32, elem2[T, U]]
 }
 
 // insert entity value into table
 func (t *table2[T, U]) insert(entity Entity, v1 *T, v2 *U) {
-	t.set.Insert(uint32(entity.id), &elem2[T, U]{entity, *v1, *v2})
+	t.set.Insert(entity.id, &elem2[T, U]{entity, *v1, *v2})
 }
 
 // hasType type check if it has specific type value
@@ -97,7 +97,7 @@ func getOrAddTable2[T any, U any](r *Registry) *table2[T, U] {
 		}
 	}
 	t := &table2[T, U]{
-		set: sparseSet.NewAutoIncresing[elem2[T, U]](100),
+		set: sparseSet.NewAutoIncresing[uint32, elem2[T, U]](100),
 	}
 	r.tables = append(r.tables, t)
 	return t
