@@ -1,18 +1,8 @@
-# ECSGo
-ECSGo is an Entity Component System(ECS) in Go.
-This is made with Generic Go, so it needs Go 1.18 version
-
-- Cache friendly data storage
-- Run systems in concurrently with analyzing dependency tree.
-
-
-## Example
-```go
 package main
 
 import (
-    "kongbong/ecsgo"
-    "log"
+	"log"
+	"github.com/kongbong/ecsgo"
 )
 
 type Position struct {
@@ -45,4 +35,3 @@ func main() {
 
     registry.Run()
 }
-```
