@@ -28,20 +28,20 @@ type Velocity struct {
 func main() {
     registry := ecsgo.New()
 
-    ecsgo.AddSystem1[Position](registry, func (entity ecsgo.EntityVer, pos *Position) {		
+    ecsgo.AddSystem1(registry, func (entity ecsgo.EntityVer, pos *Position) {		
         log.Println("Position system Done")
     })
 
-    ecsgo.AddSystem1[Velocity](registry, func (entity ecsgo.EntityVer, vel *Velocity) {
+    ecsgo.AddSystem1(registry, func (entity ecsgo.EntityVer, vel *Velocity) {
         log.Println("Velocity system Done")
     })
 
-    ecsgo.AddSystem2[Position, Velocity](registry, func (entity ecsgo.EntityVer, pos *Position, vel *Velocity) {
+    ecsgo.AddSystem2(registry, func (entity ecsgo.EntityVer, pos *Position, vel *Velocity) {
         log.Println("Position, Velocity system")		
     })
 
     entity := registry.Create()
-    ecsgo.SetEntityComponent2[Position, Velocity](registry, entity, &Position{10, 10}, &Velocity{10, 10})
+    ecsgo.SetEntityComponent2(registry, entity, &Position{10, 10}, &Velocity{10, 10})
 
     registry.Run()
 }

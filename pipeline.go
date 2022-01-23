@@ -5,17 +5,20 @@ import (
 	"sync"
 )
 
+// pipeline running pipeline where has systems in dependency tree
 type pipeline struct {
 	depenMap map[reflect.Type]*pipeNode
 	sysw     []*sysWrapper
 }
 
+// newPipeline make new pipeline
 func newPipeline() *pipeline {
 	return &pipeline{
 		depenMap: make(map[reflect.Type]*pipeNode),
 	}
 }
 
+// addSystem adding system in pipeline, analyzing dependency and making tree
 func (p *pipeline) addSystem(sys isystem) {
 	types := sys.getCmpTypes()
 	sysw := newWrapper(sys, len(types))
@@ -40,6 +43,7 @@ func (p *pipeline) addSystem(sys isystem) {
 	}
 }
 
+// run run pipeline and waiting until all systems are done
 func (p *pipeline) run() {
 
 	for _, n := range p.depenMap {
@@ -54,6 +58,7 @@ func (p *pipeline) run() {
 	wg.Wait()
 }
 
+// runNodeline single dependency line
 func runNodeline(n *pipeNode) {
 	for n != nil {
 		n.sysw.waitch <- true
@@ -62,12 +67,14 @@ func runNodeline(n *pipeNode) {
 	}
 }
 
+// pipeNode single dependency line
 type pipeNode struct {
 	next   *pipeNode
 	sysw   *sysWrapper
 	donech chan bool
 }
 
+// sysWrapper system wrapper for waiting dependent systems done
 type sysWrapper struct {
 	sys     isystem
 	waitCnt int
@@ -75,6 +82,7 @@ type sysWrapper struct {
 	nodes   []*pipeNode
 }
 
+// run run systemWrapper
 func (s *sysWrapper) run(wg *sync.WaitGroup) {
 	wc := s.waitCnt
 	for wc > 0 {
@@ -88,6 +96,7 @@ func (s *sysWrapper) run(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+// newWrapper make new system wrapper
 func newWrapper(sys isystem, waitCnt int) *sysWrapper {
 	return &sysWrapper{
 		sys:     sys,

@@ -1,5 +1,6 @@
 package sparseSet
 
+// Set sparseSet
 type Set[T any] struct {
 	dense []T
 	sparse []uint32

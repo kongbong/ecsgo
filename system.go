@@ -2,11 +2,13 @@ package ecsgo
 
 import "reflect"
 
+// isystem system interface
 type isystem interface {
 	run()
 	getCmpTypes() []reflect.Type
 }
 
+// AddSystem1 add single value system
 func AddSystem1[T any](r *Registry, fn func (entity EntityVer, t *T)) {
 	r.addsystem(&system1[T]{
 		r: r,
@@ -14,11 +16,13 @@ func AddSystem1[T any](r *Registry, fn func (entity EntityVer, t *T)) {
 	})
 }
 
+// system1 single value system
 type system1[T any] struct {
 	r *Registry
 	fn func (EntityVer, *T)
 }
 
+// query1 find tables where has type T value
 func query1[T any](r *Registry) []itable {
 	var rst []itable
 	var zeroT T
@@ -31,6 +35,7 @@ func query1[T any](r *Registry) []itable {
 	return rst
 }
 
+// run run system
 func (s *system1[T]) run() {
 	var zeroT T
 
@@ -43,11 +48,13 @@ func (s *system1[T]) run() {
 	}
 }
 
+// getCmpTypes return relying component list
 func (s *system1[T]) getCmpTypes() []reflect.Type {
 	var zeroT T
 	return []reflect.Type{reflect.TypeOf(zeroT)}
 }
 
+// AddSystem2 add two values system
 func AddSystem2[T any, U any](r *Registry, fn func (entity EntityVer, t *T, u *U)) {
 	r.addsystem(&system2[T, U]{
 		r: r,
@@ -55,11 +62,13 @@ func AddSystem2[T any, U any](r *Registry, fn func (entity EntityVer, t *T, u *U
 	})
 }
 
+// system2 two values system
 type system2[T any, U any] struct {
 	r *Registry
 	fn func (EntityVer, *T, *U)
 }
 
+// query2 find tables where has type T and U values
 func query2[T any, U any](r *Registry) []itable {
 	var rst []itable
 	var zeroT T
@@ -76,6 +85,7 @@ func query2[T any, U any](r *Registry) []itable {
 	return rst
 }
 
+// run run system
 func (s *system2[T, U]) run() {
 	var zeroT T
 	var zeroU U
@@ -90,6 +100,7 @@ func (s *system2[T, U]) run() {
 	}
 }
 
+// getCmpTypes return relying component list
 func (s *system2[T, U]) getCmpTypes() []reflect.Type {
 	var zeroT T
 	var zeroU U

@@ -24,13 +24,3 @@ func (e EntityVer) ToVersion() uint32 {
 func (e *EntityVer) SetVersion(version uint32) {
 	*e = (*e & entityMask) | EntityVer(version)
 }
-
-func SetEntityComponent1[T any](r *Registry, entity EntityVer, v *T) {
-	t := getOrAddTable1[T](r)
-	t.insert(entity, v)
-}
-
-func SetEntityComponent2[T any, U any](r *Registry, entity EntityVer, v1 *T, v2 *U) {
-	t := getOrAddTable2[T, U](r)
-	t.insert(entity, v1, v2)
-}
