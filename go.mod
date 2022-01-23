@@ -1,4 +1,4 @@
-module ecsgo
+module kongbong/ecsgo
 
 go 1.18
 
