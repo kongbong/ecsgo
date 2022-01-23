@@ -11,7 +11,7 @@ This is made with Generic Go, so it needs Go 1.18 version
 package main
 
 import (
-    "kongbong/ecsgo"
+    "github.com/kongbong/ecsgo"
     "log"
 )
 
