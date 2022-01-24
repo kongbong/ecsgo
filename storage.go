@@ -77,8 +77,9 @@ func (s *storage) eraseEntity(ent Entity) {
 func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 	valMap := make(map[reflect.Type]unsafe.Pointer)
 	types := []reflect.Type{}
-	if tb, ok := s.entityMap[ent]; ok {
-		getter := tb.find(ent)
+	prevTb, ok := s.entityMap[ent]
+	if ok {
+		getter := prevTb.find(ent)
 		if getter == nil {
 			// already removed, weird
 			panic("entity data is removed")
@@ -96,5 +97,6 @@ func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 
 	tb := s.getOrAddTable(types...)
 	tb.insert(ent, valMap)
-
+	prevTb.erase(ent)
+	s.entityMap[ent] = tb
 }
