@@ -36,7 +36,7 @@ func New() *Registry {
 }
 
 func (r *Registry) Free() {
-
+	r.storage.free()
 }
 
 // Create entity

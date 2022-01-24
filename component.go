@@ -27,4 +27,5 @@ func processDeferredComponent(r *Registry) {
 	for ent, cmps := range r.defferredCmp {
 		r.storage.addComponents(ent, cmps)
 	}
+	r.defferredCmp = make(map[Entity][]*componentInfo)
 }
