@@ -8,9 +8,33 @@ type isystem interface {
 	getCmpTypes() []reflect.Type
 }
 
+// AddSystem add none component system
+func AddSystem(r *Registry, time Ticktime, fn func (r *Registry)) {
+	r.addsystem(time, &system{
+		r: r,
+		fn: fn,
+	})
+}
+
+// system non componenet system
+type system struct {
+	r *Registry
+	fn func (r *Registry)
+}
+
+
+// run run system
+func (s *system) run() {
+	s.fn(s.r)
+}
+
+func (s *system) getCmpTypes() []reflect.Type {
+	return nil
+}
+
 // AddSystem1 add single value system
-func AddSystem1[T any](r *Registry, fn func (entity Entity, t *T)) {
-	r.addsystem(&system1[T]{
+func AddSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) {
+	r.addsystem(time, &system1[T]{
 		r: r,
 		fn: fn,
 	})
@@ -19,20 +43,13 @@ func AddSystem1[T any](r *Registry, fn func (entity Entity, t *T)) {
 // system1 single value system
 type system1[T any] struct {
 	r *Registry
-	fn func (Entity, *T)
+	fn func (*Registry, Entity, *T)
 }
 
 // query1 find tables where has type T value
-func query1[T any](r *Registry) []itable {
-	var rst []itable
+func query1[T any](r *Registry) []*unsafeTable {
 	var zeroT T
-	for _, t := range r.tables {
-		if !t.hasType(reflect.TypeOf(zeroT)) {
-			continue
-		}
-		rst = append(rst, t)
-	}
-	return rst
+	return r.storage.query(reflect.TypeOf(zeroT))
 }
 
 // run run system
@@ -41,12 +58,12 @@ func (s *system1[T]) run() {
 
 	tables := query1[T](s.r)
 	for _, t := range tables {
-		for iter := t.iterator(); iter.next(); {
+		for iter := t.iterator(); !iter.isNil(); iter.next() {
 			if !s.r.IsAlive(iter.entity()) {
 				continue
 			}			
-			ptrT := iter.get(reflect.TypeOf(zeroT)).(*T)
-			s.fn(iter.entity(), ptrT)
+			ptrT := (*T)(iter.get(reflect.TypeOf(zeroT)))
+			s.fn(s.r, iter.entity(), ptrT)
 		}
 	}
 }
@@ -58,8 +75,8 @@ func (s *system1[T]) getCmpTypes() []reflect.Type {
 }
 
 // AddSystem2 add two values system
-func AddSystem2[T any, U any](r *Registry, fn func (entity Entity, t *T, u *U)) {
-	r.addsystem(&system2[T, U]{
+func AddSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) {
+	r.addsystem(time, &system2[T, U]{
 		r: r,
 		fn: fn,
 	})
@@ -68,24 +85,14 @@ func AddSystem2[T any, U any](r *Registry, fn func (entity Entity, t *T, u *U)) 
 // system2 two values system
 type system2[T any, U any] struct {
 	r *Registry
-	fn func (Entity, *T, *U)
+	fn func (*Registry, Entity, *T, *U)
 }
 
 // query2 find tables where has type T and U values
-func query2[T any, U any](r *Registry) []itable {
-	var rst []itable
+func query2[T any, U any](r *Registry) []*unsafeTable {
 	var zeroT T
 	var zeroU U
-	for _, t := range r.tables {
-		if !t.hasType(reflect.TypeOf(zeroT)) {
-			continue
-		}
-		if !t.hasType(reflect.TypeOf(zeroU)) {
-			continue
-		}
-		rst = append(rst, t)
-	}
-	return rst
+	return r.storage.query(reflect.TypeOf(zeroT), reflect.TypeOf(zeroU))
 }
 
 // run run system
@@ -95,13 +102,13 @@ func (s *system2[T, U]) run() {
 
 	tables := query2[T, U](s.r)
 	for _, t := range tables {
-		for iter := t.iterator(); iter.next(); {
+		for iter := t.iterator(); !iter.isNil(); iter.next() {
 			if !s.r.IsAlive(iter.entity()) {
 				continue
 			}	
-			ptrT := iter.get(reflect.TypeOf(zeroT)).(*T)
-			ptrU := iter.get(reflect.TypeOf(zeroU)).(*U)
-			s.fn(iter.entity(), ptrT, ptrU)
+			ptrT := (*T)(iter.get(reflect.TypeOf(zeroT)))
+			ptrU := (*U)(iter.get(reflect.TypeOf(zeroU)))
+			s.fn(s.r, iter.entity(), ptrT, ptrU)
 		}
 	}
 }

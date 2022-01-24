@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewEntities(t *testing.T) {
-	registry := &Registry{}
+	registry := New()
 
 	for i := 0; i < 10; i++ {
 		e := registry.Create()

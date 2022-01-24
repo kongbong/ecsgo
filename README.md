@@ -11,38 +11,39 @@ This is made with Generic Go, so it needs Go 1.18 version
 package main
 
 import (
-    "github.com/kongbong/ecsgo"
-    "log"
+	"log"
+
+	"github.com/kongbong/ecsgo"
 )
 
 type Position struct {
-    X float32
-    Y float32
+	X float32
+	Y float32
 }
 
 type Velocity struct {
-    X float32
-    Y float32
+	X float32
+	Y float32
 }
 
 func main() {
-    registry := ecsgo.New()
+	registry := ecsgo.New()
+    defer registry.Free() // need to call before remove registry to free C malloc memory
 
-    ecsgo.AddSystem1(registry, func (entity ecsgo.Entity, pos *Position) {		
-        log.Println("Position system Done")
-    })
+	ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, pos *Position) {
+		log.Println("Position system", entity, pos)
+	})
+	ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, vel *Velocity) {
+		log.Println("Velocity system", entity, vel)
+	})
+	ecsgo.AddSystem2(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, pos *Position, vel *Velocity) {
+		log.Println("Position, Velocity system", entity, pos, vel)
+	})
 
-    ecsgo.AddSystem1(registry, func (entity ecsgo.Entity, vel *Velocity) {
-        log.Println("Velocity system Done")
-    })
+	entity := registry.Create()
+	ecsgo.AddComponent(registry, entity, &Position{10, 10})
+	ecsgo.AddComponent(registry, entity, &Velocity{20, 20})
 
-    ecsgo.AddSystem2(registry, func (entity ecsgo.Entity, pos *Position, vel *Velocity) {
-        log.Println("Position, Velocity system")		
-    })
-
-    entity := registry.Create()
-    ecsgo.SetEntityComponent2(registry, entity, &Position{10, 10}, &Velocity{10, 10})
-
-    registry.Run()
+	registry.Run()
 }
 ```

@@ -44,8 +44,7 @@ func (p *pipeline) addSystem(sys isystem) {
 }
 
 // run run pipeline and waiting until all systems are done
-func (p *pipeline) run() {
-
+func (p *pipeline) run(done *sync.WaitGroup) {
 	for _, n := range p.depenMap {
 		go runNodeline(n)
 	}
@@ -56,6 +55,7 @@ func (p *pipeline) run() {
 		go s.run(&wg)
 	}
 	wg.Wait()
+	done.Done()
 }
 
 // runNodeline single dependency line

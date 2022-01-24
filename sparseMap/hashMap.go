@@ -1,27 +1,27 @@
-package sparseSet
+package sparseMap
 
 import "log"
 
-// Set sparseSet
-type HashSet[K comparable, T any] struct {
+// Set sparseMap
+type HashMap[K comparable, T any] struct {
 	denseMap      []K
 	dense         []T
 	sparse        map[K]int
 	autoincresing bool
 }
 
-func NewHash[K comparable, T any]() *HashSet[K, T] {
-	return &HashSet[K, T]{
+func NewHash[K comparable, T any]() *HashMap[K, T] {
+	return &HashMap[K, T]{
 		sparse: make(map[K]int),
 	}
 }
 
 // for primitive type values
-func (s *HashSet[K, T]) InsertVal(id K, val T) bool {
+func (s *HashMap[K, T]) InsertVal(id K, val T) bool {
 	return s.Insert(id, &val)
 }
 
-func (s *HashSet[K, T]) Insert(id K, val *T) bool {
+func (s *HashMap[K, T]) Insert(id K, val *T) bool {
 	
 	if _, ok := s.sparse[id]; ok {
 		// already inserted
@@ -35,7 +35,7 @@ func (s *HashSet[K, T]) Insert(id K, val *T) bool {
 	return true
 }
 
-func (s *HashSet[K, T]) Find(id K) *T {
+func (s *HashMap[K, T]) Find(id K) *T {
 	idx, ok := s.sparse[id]
 	if !ok {
 		// not inserted
@@ -44,7 +44,7 @@ func (s *HashSet[K, T]) Find(id K) *T {
 	return &s.dense[idx]
 }
 
-func (s *HashSet[K, T]) Erase(id K) {
+func (s *HashMap[K, T]) Erase(id K) {
 	idx, ok := s.sparse[id]
 	if !ok {
 		// not inserted
@@ -66,12 +66,12 @@ func (s *HashSet[K, T]) Erase(id K) {
 	s.denseMap = s.denseMap[:len(s.denseMap)-1]
 }
 
-func (s *HashSet[K, T]) Clear() {
+func (s *HashMap[K, T]) Clear() {
 	s.dense = s.dense[:0]
 	s.denseMap = s.denseMap[:0]
 	s.sparse = make(map[K]int)
 }
 
-func (s *HashSet[K, T]) Iterate() []T {
+func (s *HashMap[K, T]) Iterate() []T {
 	return s.dense
 }

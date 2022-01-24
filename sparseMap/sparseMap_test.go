@@ -1,4 +1,4 @@
-package sparseSet
+package sparseMap
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSet(t *testing.T) {
+func TestMap(t *testing.T) {
 	sparse := New[uint32, int](10)
 	sparse.InsertVal(5, 100)
 	sparse.InsertVal(1, 1000)
@@ -24,7 +24,7 @@ func TestSet(t *testing.T) {
 	assert.Equal(t, 200, *sparse.Find(3))
 }
 
-func TestAutoIncresingSet(t *testing.T) {
+func TestAutoIncresingMap(t *testing.T) {
 	sparse := NewAutoIncresing[uint32, int](5)
 
 	for i := 0; i < 10; i++ {
@@ -51,15 +51,15 @@ func TestRemoveIterate(t *testing.T) {
 	assert.Equal(t, 8, len(sparse.Iterate()))
 }
 
-func BenchmarkSet(b *testing.B) {
-	set := New[int, int](b.N)
+func BenchmarkMap(b *testing.B) {
+	m := New[int, int](b.N)
 	for n := 0; n < b.N; n++ {
-		set.InsertVal(n, n*100)
+		m.InsertVal(n, n*100)
 	}
 	for n := 0; n < b.N; n++ {
-		set.Find(n)
+		m.Find(n)
 	}
 	for n := 0; n < b.N; n++ {
-		set.Erase(n)
+		m.Erase(n)
 	}
 }

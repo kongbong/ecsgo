@@ -21,12 +21,13 @@ type Velocity struct {
 
 func TestECSGo(t *testing.T) {
 	registry := New()
+	defer registry.Free()
 
 	var called1 bool
 	var called2 bool
 	var wg sync.WaitGroup
 	wg.Add(3)
-	AddSystem1[Position](registry, func (entity Entity, pos *Position) {
+	AddSystem1[Position](registry, onTick, func (r *Registry, entity Entity, pos *Position) {
 		log.Println("Position system")
 		assert.Equal(t, pos.X, float32(10))
 		assert.Equal(t, pos.Y, float32(10))
@@ -35,7 +36,7 @@ func TestECSGo(t *testing.T) {
 		wg.Done()
 		log.Println("Position system Done")
 	})
-	AddSystem1[Velocity](registry, func (entity Entity, vel *Velocity) {
+	AddSystem1[Velocity](registry, onTick, func (r *Registry, entity Entity, vel *Velocity) {
 		log.Println("Velocity system")
 		assert.False(t, called1)
 		assert.Equal(t, vel.X, float32(10))
@@ -45,7 +46,7 @@ func TestECSGo(t *testing.T) {
 		wg.Done()
 		log.Println("Velocity system Done")
 	})
-	AddSystem2[Position, Velocity](registry, func (entity Entity, pos *Position, vel *Velocity) {
+	AddSystem2[Position, Velocity](registry, onTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
 		log.Println("Position, Velocity system")
 		assert.True(t, called1)
 		assert.True(t, called2)
@@ -57,7 +58,8 @@ func TestECSGo(t *testing.T) {
 	})
 
 	entity := registry.Create()
-	SetEntityComponent2[Position, Velocity](registry, entity, &Position{10, 10}, &Velocity{10, 10})
+	AddComponent[Position](registry, entity, &Position{10, 10})
+	AddComponent[Velocity](registry, entity, &Velocity{10, 10})
 
 	registry.Run()
 	wg.Wait()

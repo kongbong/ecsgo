@@ -1,4 +1,4 @@
-package sparseSet
+package sparseMap
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHashSet(t *testing.T) {
+func TestHashMap(t *testing.T) {
 	set := NewHash[int, int]()
 	set.InsertVal(5, 100)
 	set.InsertVal(1, 1000)
@@ -20,7 +20,7 @@ func TestHashSet(t *testing.T) {
 	assert.Equal(t, 200, *set.Find(3))
 }
 
-func TestHashSetRemoveIterate(t *testing.T) {
+func TestHashMapRemoveIterate(t *testing.T) {
 	set := NewHash[int, int]()
 	set.InsertVal(5, 100)
 	set.Erase(5)
@@ -35,7 +35,7 @@ func TestHashSetRemoveIterate(t *testing.T) {
 	assert.Equal(t, 8, len(set.Iterate()))
 }
 
-func BenchmarkHashSet(b *testing.B) {
+func BenchmarkHashMap(b *testing.B) {
 	set := NewHash[int, int]()
 	for n := 0; n < b.N; n++ {
 		set.InsertVal(n, n * 100)

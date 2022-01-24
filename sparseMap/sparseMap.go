@@ -1,33 +1,33 @@
-package sparseSet
+package sparseMap
 
 import (
 	"constraints"
 	"log"
 )
 
-// Set sparseSet
-type Set[K constraints.Integer, T any] struct {
+// Map sparseMap
+type Map[K constraints.Integer, T any] struct {
 	denseMap      []K
 	dense         []T
 	sparse        []K
 	autoincresing bool
 }
 
-func New[K constraints.Integer, T any](maxValue K) *Set[K, T] {
-	return &Set[K, T]{
+func New[K constraints.Integer, T any](maxValue K) *Map[K, T] {
+	return &Map[K, T]{
 		sparse: make([]K, maxValue+1),
 		autoincresing: false,
 	}
 }
 
-func NewAutoIncresing[K constraints.Integer, T any](maxValue K) *Set[K, T] {
-	return &Set[K, T]{
+func NewAutoIncresing[K constraints.Integer, T any](maxValue K) *Map[K, T] {
+	return &Map[K, T]{
 		sparse: make([]K, maxValue+1),
 		autoincresing: true,
 	}
 }
 
-func (s *Set[K, T]) newMaxValue(maxValue K) {
+func (s *Map[K, T]) newMaxValue(maxValue K) {
 	if len(s.sparse) >= int(maxValue+1) {
 		panic("only increasing is possible")
 	}
@@ -38,11 +38,11 @@ func (s *Set[K, T]) newMaxValue(maxValue K) {
 }
 
 // for primitive type values
-func (s *Set[K, T]) InsertVal(id K, val T) bool {
+func (s *Map[K, T]) InsertVal(id K, val T) bool {
 	return s.Insert(id, &val)
 }
 
-func (s *Set[K, T]) Insert(id K, val *T) bool {
+func (s *Map[K, T]) Insert(id K, val *T) bool {
 	if int(id) >= len(s.sparse) {
 		if s.autoincresing {
 			newMaxValue := K(len(s.sparse)*2)
@@ -67,7 +67,7 @@ func (s *Set[K, T]) Insert(id K, val *T) bool {
 	return true
 }
 
-func (s *Set[K, T]) Find(id K) *T {
+func (s *Map[K, T]) Find(id K) *T {
 	if int(id) >= len(s.sparse) {
 		// exceed maxValue
 		return nil
@@ -80,7 +80,7 @@ func (s *Set[K, T]) Find(id K) *T {
 	return &s.dense[idx-1]
 }
 
-func (s *Set[K, T]) Erase(id K) {
+func (s *Map[K, T]) Erase(id K) {
 	if s.Find(id) == nil {
 		// not inserted
 		return
@@ -102,12 +102,12 @@ func (s *Set[K, T]) Erase(id K) {
 	s.denseMap = s.denseMap[:len(s.denseMap)-1]
 }
 
-func (s *Set[K, T]) Clear() {
+func (s *Map[K, T]) Clear() {
 	s.dense = s.dense[:0]
 	s.denseMap = s.denseMap[:0]
 	s.sparse = make([]K, len(s.sparse))
 }
 
-func (s *Set[K, T]) Iterate() []T {
+func (s *Map[K, T]) Iterate() []T {
 	return s.dense
 }
