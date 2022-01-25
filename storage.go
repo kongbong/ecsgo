@@ -3,8 +3,6 @@ package ecsgo
 import (
 	"reflect"
 	"unsafe"
-
-	"github.com/kongbong/ecsgo/sparseMap"
 )
 
 // storage has tables
@@ -25,13 +23,22 @@ func (s *storage) free() {
 	}
 }
 
-func (s *storage) query(types ...reflect.Type) []*unsafeTable {
+func (s *storage) query(includeTypes []reflect.Type, excludeTypes []reflect.Type) []*unsafeTable {
 	var rst []*unsafeTable
 
 	for _, t := range s.tables {
 		found := true
-		for _, tp := range types {
+		for _, tp := range includeTypes {
 			if !t.hasType(tp) {
+				found = false
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		for _, tp := range excludeTypes {
+			if t.hasType(tp) {
 				found = false
 				break
 			}
@@ -50,19 +57,7 @@ func (s *storage) getOrAddTable(types ...reflect.Type) *unsafeTable {
 			return t
 		}
 	}
-	sortTypes(types)
-	var ent Entity
-	dataSize := int(unsafe.Sizeof(ent))
-	tb := &unsafeTable{}
-	for _, t := range types {
-		column := &columnDesc{
-			dataType: t,
-			offset:   dataSize,
-		}
-		dataSize += int(t.Size())
-		tb.columns = append(tb.columns, column)
-	}
-	tb.spMap = sparseMap.NewUnsafeAutoIncresing[uint32](dataSize, 100)
+	tb := newTable(types...)
 	s.tables = append(s.tables, tb)
 	return tb
 }
@@ -84,9 +79,9 @@ func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 			// already removed, weird
 			panic("entity data is removed")
 		}
-		for _, c := range getter.columns {
-			valMap[c.dataType] = unsafe.Add(getter.ptr, c.offset)
-			types = append(types, c.dataType)
+		for tp, off := range getter.typeOffMap {
+			valMap[tp] = unsafe.Add(getter.ptr, off)
+			types = append(types, tp)
 		}
 	}
 
@@ -97,6 +92,8 @@ func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 
 	tb := s.getOrAddTable(types...)
 	tb.insert(ent, valMap)
-	prevTb.erase(ent)
+	if prevTb != nil {
+		prevTb.erase(ent)
+	}
 	s.entityMap[ent] = tb
 }

@@ -85,7 +85,9 @@ func (s *UnsafeMap[K]) Insert(id K, val unsafe.Pointer) bool {
 		newCap := s.denseCap * 2 + 1
 		newDense := unsafe.Pointer(C.malloc(C.size_t(newCap * s.valueSize)))
 		C.memcpy(newDense, s.dense, C.size_t(s.denseCap * s.valueSize))
-		C.free(s.dense)
+		if uintptr(s.dense) != uintptr(0) {
+			C.free(s.dense)
+		}		
 		s.dense = newDense
 		s.denseCap = newCap
 	}

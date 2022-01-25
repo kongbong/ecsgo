@@ -13,13 +13,23 @@ import (
 )
 
 type unsafeTable struct {
-	spMap *sparseMap.UnsafeMap[uint32]
-	columns []*columnDesc
+	spMap *sparseMap.UnsafeMap[uint32]	
+	typeOffMap map[reflect.Type]int
 }
 
-type columnDesc struct {
-	dataType reflect.Type
-	offset int
+func newTable(types ...reflect.Type) *unsafeTable {
+	tb := &unsafeTable{
+		typeOffMap: make(map[reflect.Type]int),
+	}
+
+	var ent Entity
+	dataSize := int(unsafe.Sizeof(ent))
+	for _, t := range types {			
+		tb.typeOffMap[t] = dataSize	
+		dataSize += int(t.Size())
+	}
+	tb.spMap = sparseMap.NewUnsafeAutoIncresing[uint32](dataSize, 100)
+	return tb
 }
 
 func (t *unsafeTable) free() {
@@ -27,12 +37,11 @@ func (t *unsafeTable) free() {
 }
 
 func (t *unsafeTable) Same(types ...reflect.Type) bool {
-	if len(types) != len(t.columns) {
+	if len(types) != len(t.typeOffMap) {
 		return false
 	}
-	sortTypes(types)
-	for i, c := range t.columns {
-		if types[i] != c.dataType {
+	for _, tp := range types {
+		if _, ok := t.typeOffMap[tp]; !ok {
 			return false
 		}
 	}
@@ -40,13 +49,9 @@ func (t *unsafeTable) Same(types ...reflect.Type) bool {
 }
 
 // hasType type check if it has specific type value
-func (t *unsafeTable) hasType(tp reflect.Type) bool {
-	for _, c := range t.columns {
-		if tp == c.dataType {
-			return true
-		}
-	}
-	return false
+func (t *unsafeTable) hasType(tp reflect.Type) bool {	
+	_, ok := t.typeOffMap[tp]
+	return ok
 }
 
 func (t *unsafeTable) erase(ent Entity) {
@@ -60,7 +65,7 @@ func (t *unsafeTable) find(ent Entity) *typeGetter {
 	}
 	return &typeGetter{
 		ptr: ptr,
-		columns: t.columns,
+		typeOffMap: t.typeOffMap,
 	}
 }
 
@@ -69,8 +74,8 @@ func (t *unsafeTable) insert(ent Entity, valMap map[reflect.Type]unsafe.Pointer)
 	ptr := unsafe.Pointer(C.malloc(C.size_t(sz)))
 	C.memcpy(ptr, unsafe.Pointer(&ent), C.size_t(unsafe.Sizeof(ent)))
 
-	for _, c := range t.columns {
-		C.memcpy(unsafe.Add(ptr, c.offset), valMap[c.dataType], C.size_t(c.dataType.Size()))
+	for tp, off := range t.typeOffMap {
+		C.memcpy(unsafe.Add(ptr, off), valMap[tp], C.size_t(tp.Size()))
 	}
 
 	success := t.spMap.Insert(ent.id, ptr)
@@ -82,24 +87,23 @@ func (t *unsafeTable) insert(ent Entity, valMap map[reflect.Type]unsafe.Pointer)
 
 type typeGetter struct {
 	ptr unsafe.Pointer
-	columns []*columnDesc
+	typeOffMap map[reflect.Type]int
 }
 
 func (g *typeGetter) get(t reflect.Type) unsafe.Pointer {
 	if uintptr(g.ptr) == 0 {
 		panic("ptr is nil")
 	}
-	for _, c := range g.columns {
-		if c.dataType == t {
-			return unsafe.Add(g.ptr, c.offset)
-		}
+	off, ok := g.typeOffMap[t]
+	if !ok {
+		panic("table doesn't have the type")
 	}
-	return nil
+	return unsafe.Add(g.ptr, off)
 }
 
 // iterator get iterator
 func (t *unsafeTable) iterator() *tableIter {
-	return newTableIter(t.spMap.Iterate(), t.columns)
+	return newTableIter(t.spMap.Iterate(), t.typeOffMap)
 }
 
 // iiter iterator interface
@@ -108,12 +112,12 @@ type tableIter struct {
 	getter typeGetter
 }
 
-func newTableIter(iter *sparseMap.UnsafeIter, columns []*columnDesc) *tableIter {
+func newTableIter(iter *sparseMap.UnsafeIter, typeOffMap map[reflect.Type]int) *tableIter {
 	return &tableIter{
 		iter: iter,
 		getter: typeGetter{
 			ptr: iter.Get(),
-			columns: columns,
+			typeOffMap: typeOffMap,
 		},
 	}
 }

@@ -19,36 +19,37 @@ type Velocity struct {
 	Y float32
 }
 
+type HP struct {
+	Hp float32
+	MaxHp float32
+}
+
 func TestECSGo(t *testing.T) {
 	registry := New()
 	defer registry.Free()
 
-	var called1 bool
 	var called2 bool
 	var wg sync.WaitGroup
-	wg.Add(3)
-	AddSystem1[Position](registry, onTick, func (r *Registry, entity Entity, pos *Position) {
-		log.Println("Position system")
-		assert.Equal(t, pos.X, float32(10))
-		assert.Equal(t, pos.Y, float32(10))
-		time.Sleep(time.Second)
-		called1 = true
-		wg.Done()
-		log.Println("Position system Done")
-	})
-	AddSystem1[Velocity](registry, onTick, func (r *Registry, entity Entity, vel *Velocity) {
-		log.Println("Velocity system")
-		assert.False(t, called1)
-		assert.Equal(t, vel.X, float32(10))
-		assert.Equal(t, vel.Y, float32(10))
-		time.Sleep(time.Second)
-		called2 = true
-		wg.Done()
-		log.Println("Velocity system Done")
-	})
-	AddSystem2[Position, Velocity](registry, onTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
+	wg.Add(2)
+	Exclude1[Velocity](
+		AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+			log.Println("Should not call this")
+			assert.True(t, false)
+		}),
+	)
+	Exclude1[HP](
+		AddSystem1[Velocity](registry, OnTick, func (r *Registry, entity Entity, vel *Velocity) {
+			log.Println("Velocity system")
+			assert.Equal(t, vel.X, float32(10))
+			assert.Equal(t, vel.Y, float32(10))
+			time.Sleep(time.Second)
+			called2 = true
+			wg.Done()
+			log.Println("Velocity system Done")
+		}),
+	)
+	AddSystem2[Position, Velocity](registry, OnTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
 		log.Println("Position, Velocity system")
-		assert.True(t, called1)
 		assert.True(t, called2)
 		assert.Equal(t, pos.X, float32(10))
 		assert.Equal(t, pos.Y, float32(10))

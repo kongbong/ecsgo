@@ -20,7 +20,7 @@ func newPipeline() *pipeline {
 
 // addSystem adding system in pipeline, analyzing dependency and making tree
 func (p *pipeline) addSystem(sys isystem) {
-	types := sys.getCmpTypes()
+	types := sys.getIncludeTypes()
 	sysw := newWrapper(sys, len(types))
 	p.sysw = append(p.sysw, sysw)
 
