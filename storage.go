@@ -23,13 +23,13 @@ func (s *storage) free() {
 	}
 }
 
-func (s *storage) query(includeTypes []reflect.Type, excludeTypes []reflect.Type) []*unsafeTable {
+func (s *storage) query(includeTypes []includeTypeInfo, excludeTypes []reflect.Type) []*unsafeTable {
 	var rst []*unsafeTable
 
 	for _, t := range s.tables {
 		found := true
-		for _, tp := range includeTypes {
-			if !t.hasType(tp) {
+		for _, cmpInfo := range includeTypes {
+			if !t.hasType(cmpInfo.tp) {
 				found = false
 				break
 			}
@@ -86,8 +86,8 @@ func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 	}
 
 	for _, c := range cmpInfos {
-		valMap[c.dataType] = c.ptr
-		types = append(types, c.dataType)
+		valMap[c.tp] = c.ptr
+		types = append(types, c.tp)
 	}
 
 	tb := s.getOrAddTable(types...)

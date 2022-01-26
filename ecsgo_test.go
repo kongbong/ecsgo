@@ -24,37 +24,101 @@ type HP struct {
 	MaxHp float32
 }
 
+type ReferenceFieldComponent struct {
+	sliceIsNotAllowed []int
+}
+
+type EmptySizeComponent struct {}
+
+type EnemyTag struct {}
+
 func TestECSGo(t *testing.T) {
 	registry := New()
 	defer registry.Free()
 
 	var called2 bool
 	var wg sync.WaitGroup
-	wg.Add(2)
-	Exclude1[Velocity](
-		AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
-			log.Println("Should not call this")
-			assert.True(t, false)
-		}),
-	)
-	Exclude1[HP](
-		AddSystem1[Velocity](registry, OnTick, func (r *Registry, entity Entity, vel *Velocity) {
-			log.Println("Velocity system")
-			assert.Equal(t, vel.X, float32(10))
-			assert.Equal(t, vel.Y, float32(10))
-			time.Sleep(time.Second)
-			called2 = true
-			wg.Done()
-			log.Println("Velocity system Done")
-		}),
-	)
-	AddSystem2[Position, Velocity](registry, OnTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
+	wg.Add(3)
+	sys := AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		log.Println("Should not call this")
+		assert.True(t, false)
+	})
+	Exclude[Velocity](sys)
+	Exclude[EnemyTag](sys)
+	
+	sys = AddSystem1[Velocity](registry, OnTick, func (r *Registry, entity Entity, vel *Velocity) {
+		log.Println("Velocity system")
+		assert.Equal(t, vel.X, float32(10))
+		assert.Equal(t, vel.Y, float32(10))
+		time.Sleep(time.Second)
+		called2 = true
+		wg.Done()
+		log.Println("Velocity system Done")
+	})
+	Exclude[HP](sys)
+	Exclude[EnemyTag](sys)
+
+	sys = AddSystem2[Position, Velocity](registry, OnTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
 		log.Println("Position, Velocity system")
 		assert.True(t, called2)
 		assert.Equal(t, pos.X, float32(10))
 		assert.Equal(t, pos.Y, float32(10))
 		assert.Equal(t, vel.X, float32(10))
 		assert.Equal(t, vel.Y, float32(10))
+		wg.Done()
+	})
+	Exclude[EnemyTag](sys)
+	
+	sys = AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		log.Println("Position system With Enemy Tag")
+		assert.Equal(t, pos.X, float32(100))
+		assert.Equal(t, pos.Y, float32(100))
+		wg.Done()
+	})
+	Tag[EnemyTag](sys)
+
+	entity := registry.Create()
+	AddComponent[Position](registry, entity, &Position{10, 10})
+	AddComponent[Velocity](registry, entity, &Velocity{10, 10})
+	err := AddComponent[ReferenceFieldComponent](registry, entity, &ReferenceFieldComponent{})
+	assert.NotNil(t, err)
+	err = AddComponent[EmptySizeComponent](registry, entity, &EmptySizeComponent{})
+	assert.NotNil(t, err)
+
+	entity = registry.Create()
+	AddComponent[Position](registry, entity, &Position{100, 100})
+	AddTag[EnemyTag](registry, entity)
+
+	registry.Run()
+	wg.Wait()
+}
+
+
+func TestECSGoReadOnly(t *testing.T) {
+	registry := New()
+	defer registry.Free()
+
+	var called1 bool
+	var wg sync.WaitGroup
+	wg.Add(3)
+	sys := AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		log.Println("First Position system")
+		time.Sleep(time.Second)
+		called1 = true
+		wg.Done()
+	})
+	Readonly[Position](sys)
+
+	sys = AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		log.Println("Second Position system")
+		assert.False(t, called1)
+		wg.Done()
+	})
+	Readonly[Position](sys)
+
+	AddSystem2[Position, Velocity](registry, OnTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
+		log.Println("Position, Velocity system")
+		assert.True(t, called1)
 		wg.Done()
 	})
 

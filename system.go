@@ -5,18 +5,34 @@ import "reflect"
 // isystem system interface
 type isystem interface {
 	run()
-	getIncludeTypes() []reflect.Type
+	getIncludeTypes() []includeTypeInfo
 	getExcludeTypes() []reflect.Type
-	setExcludeTypes(types ...reflect.Type)
+	addExcludeTypes(tp reflect.Type)
+	addIncludeTypes(tp reflect.Type, tag bool)
+	makeReadonly(tp reflect.Type)
+	isReadonly(tp reflect.Type) bool
+}
+
+type includeTypeInfo struct {
+	tp reflect.Type
+	tag bool
 }
 
 type baseSystem struct {
 	r *Registry
-	includeTypes []reflect.Type
+	includeTypes []includeTypeInfo
 	excludeTypes []reflect.Type
+	readonlyMap map[reflect.Type]bool
 }
 
-func (s *baseSystem) getIncludeTypes() []reflect.Type {
+func newBaseSystem(r *Registry) *baseSystem {
+	return &baseSystem{
+		r: r,
+		readonlyMap: make(map[reflect.Type]bool),
+	}
+}
+
+func (s *baseSystem) getIncludeTypes() []includeTypeInfo {
 	return s.includeTypes
 }
 
@@ -24,32 +40,46 @@ func (s *baseSystem) getExcludeTypes() []reflect.Type {
 	return s.excludeTypes
 }
 
-func (s *baseSystem) setExcludeTypes(types ...reflect.Type) {
-	s.excludeTypes = types
+func (s *baseSystem) addExcludeTypes(tp reflect.Type) {
+	s.excludeTypes = append(s.excludeTypes, tp)
 }
 
-func (s *baseSystem) setIncludeTypes(types ...reflect.Type) {
-	s.includeTypes = types
+func (s *baseSystem) addIncludeTypes(tp reflect.Type, tag bool) {
+	s.includeTypes = append(s.includeTypes, includeTypeInfo{tp, tag})
+}
+
+
+func (s *baseSystem) makeReadonly(tp reflect.Type) {
+	s.readonlyMap[tp] = true
+}
+
+func (s *baseSystem) isReadonly(tp reflect.Type) bool {
+	return s.readonlyMap[tp]
 }
 
 func (s *baseSystem) query() []*unsafeTable {
 	return s.r.storage.query(s.includeTypes, s.excludeTypes)
 }
 
-// AddSystem add none component system
-func AddSystem(r *Registry, time Ticktime, fn func (r *Registry)) isystem {
-	sys := &system{
-		fn: fn,
-	}
-	sys.r = r
-	r.addsystem(time, sys)
-	return sys
-}
-
 // system non componenet system
 type system struct {
 	baseSystem
 	fn func (r *Registry)
+}
+
+func MakeSystem(r *Registry, fn func (r *Registry)) isystem {
+	sys := &system{
+		baseSystem: *newBaseSystem(r),
+		fn: fn,
+	}
+	return sys
+}
+
+// AddSystem add none component system
+func AddSystem(r *Registry, time Ticktime, fn func (r *Registry)) isystem {
+	sys := MakeSystem(r, fn)
+	r.defferredAddsystem(time, sys)
+	return sys
 }
 
 // run run system
@@ -65,26 +95,35 @@ type system1[T any] struct {
 
 // AddSystem1 add single value system
 func AddSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) isystem {
-	sys := &system1[T]{
-		fn: fn,
-	}	
-	sys.r = r
 	var zeroT T
-	sys.setIncludeTypes(reflect.TypeOf(zeroT))
-	r.addsystem(time, sys)
+	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
+		panic(err)
+	}
+	sys := &system1[T]{
+		baseSystem: *newBaseSystem(r),
+		fn: fn,
+	}
+	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
+	r.defferredAddsystem(time, sys)
 	return sys
 }
 
 // run run system
 func (s *system1[T]) run() {
 	var zeroT T
+	typeT := reflect.TypeOf(zeroT)
 	tables := s.query()
 	for _, t := range tables {
 		for iter := t.iterator(); !iter.isNil(); iter.next() {
 			if !s.r.IsAlive(iter.entity()) {
 				continue
 			}			
-			ptrT := (*T)(iter.get(reflect.TypeOf(zeroT)))
+			ptrT := (*T)(iter.get(typeT))
+			if s.isReadonly(typeT) {
+				// copy to temp data
+				zeroT = *ptrT
+				ptrT = &zeroT
+			}
 			s.fn(s.r, iter.entity(), ptrT)
 		}
 	}
@@ -98,14 +137,22 @@ type system2[T any, U any] struct {
 
 // AddSystem2 add two values system
 func AddSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
-	sys := &system2[T, U]{
-		fn: fn,
-	}	
-	sys.r = r
 	var zeroT T
 	var zeroU U
-	sys.setIncludeTypes(reflect.TypeOf(zeroT), reflect.TypeOf(zeroU))
-	r.addsystem(time, sys)
+	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
+		panic(err)
+	}
+	if err := checkType(reflect.TypeOf(zeroU)); err != nil {
+		panic(err)
+	}
+
+	sys := &system2[T, U]{
+		baseSystem: *newBaseSystem(r),
+		fn: fn,
+	}
+	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
+	sys.addIncludeTypes(reflect.TypeOf(zeroU), false)
+	r.defferredAddsystem(time, sys)
 	return sys
 }
 
@@ -113,26 +160,53 @@ func AddSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, 
 func (s *system2[T, U]) run() {
 	var zeroT T
 	var zeroU U
+	typeT := reflect.TypeOf(zeroT)
+	typeU := reflect.TypeOf(zeroU)
 	tables := s.query()
 	for _, t := range tables {
 		for iter := t.iterator(); !iter.isNil(); iter.next() {
 			if !s.r.IsAlive(iter.entity()) {
 				continue
 			}	
-			ptrT := (*T)(iter.get(reflect.TypeOf(zeroT)))
-			ptrU := (*U)(iter.get(reflect.TypeOf(zeroU)))
+			ptrT := (*T)(iter.get(typeT))
+			ptrU := (*U)(iter.get(typeU))
+			if s.isReadonly(typeT) {
+				// copy to temp data
+				zeroT = *ptrT
+				ptrT = &zeroT
+			}
+			if s.isReadonly(typeU) {
+				// copy to temp data
+				zeroU = *ptrU
+				ptrU = &zeroU
+			}
 			s.fn(s.r, iter.entity(), ptrT, ptrU)
 		}
 	}
 }
 
-func Exclude1[T any](sys isystem) {
+func Exclude[T any](sys isystem) {
 	var zeroT T
-	sys.setExcludeTypes(reflect.TypeOf(zeroT))
+	sys.addExcludeTypes(reflect.TypeOf(zeroT))
 }
 
-func Exclude2[T any, U any](sys isystem) {
+func ExcludeTag[T any](sys isystem) {
 	var zeroT T
-	var zeroU U
-	sys.setExcludeTypes(reflect.TypeOf(zeroT), reflect.TypeOf(zeroU))
+	if err := checkTagType(reflect.TypeOf(zeroT)); err != nil {
+		panic(err)
+	}
+	sys.addExcludeTypes(reflect.TypeOf(zeroT))
+}
+
+func Tag[T any](sys isystem) {
+	var zeroT T
+	if err := checkTagType(reflect.TypeOf(zeroT)); err != nil {
+		panic(err)
+	}
+	sys.addIncludeTypes(reflect.TypeOf(zeroT), true)
+}
+
+func Readonly[T any](sys isystem) {
+	var zeroT T
+	sys.makeReadonly(reflect.TypeOf(zeroT))
 }

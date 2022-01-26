@@ -75,7 +75,9 @@ func (t *unsafeTable) insert(ent Entity, valMap map[reflect.Type]unsafe.Pointer)
 	C.memcpy(ptr, unsafe.Pointer(&ent), C.size_t(unsafe.Sizeof(ent)))
 
 	for tp, off := range t.typeOffMap {
-		C.memcpy(unsafe.Add(ptr, off), valMap[tp], C.size_t(tp.Size()))
+		if tp.Size() > 0 {
+			C.memcpy(unsafe.Add(ptr, off), valMap[tp], C.size_t(tp.Size()))
+		}
 	}
 
 	success := t.spMap.Insert(ent.id, ptr)

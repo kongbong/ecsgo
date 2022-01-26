@@ -19,6 +19,7 @@ type Registry struct {
 	freelist     []Entity
 	storage      *storage
 	pipelines    [ticktimeMax]*pipeline
+	defferredSys []sysInfo
 	defferredCmp map[Entity][]*componentInfo
 }
 
@@ -31,7 +32,7 @@ func New() *Registry {
 	for i := 0; i < int(ticktimeMax); i++ {
 		r.pipelines[i] = newPipeline()
 	}
-	AddSystem(r, PreTick, processDeferredComponent)
+	r.pipelines[PreTick].addSystem(MakeSystem(r, processDeferredProcess))
 	return r
 }
 
@@ -78,12 +79,30 @@ func (r *Registry) Run() {
 	}
 }
 
+type sysInfo struct {
+	time   Ticktime
+	system isystem
+}
+
 // addsystem add system in pipeline
-func (r *Registry) addsystem(time Ticktime, system isystem) {
-	r.pipelines[time].addSystem(system)
+func (r *Registry) defferredAddsystem(time Ticktime, system isystem) {
+	r.defferredSys = append(r.defferredSys, sysInfo{time, system})
+	//r.pipelines[time].addSystem(system)
 }
 
 // addComponent is defferred until next pre tick
 func (r *Registry) defferredAddComponent(ent Entity, cmpInfo *componentInfo) {
 	r.defferredCmp[ent] = append(r.defferredCmp[ent], cmpInfo)
+}
+
+func processDeferredProcess(r *Registry) {
+	for ent, cmps := range r.defferredCmp {
+		r.storage.addComponents(ent, cmps)
+	}
+	r.defferredCmp = make(map[Entity][]*componentInfo)
+
+	for _, sysInfo := range r.defferredSys {
+		r.pipelines[sysInfo.time].addSystem(sysInfo.system)
+	}
+	r.defferredSys = nil
 }
