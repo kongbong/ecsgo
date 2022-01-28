@@ -32,8 +32,13 @@ func main() {
 	})
 	ecsgo.Exclude[EnemyTag](sys)
 
+	ecsgo.PostTask1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, vel *Velocity) {
+		log.Println("This is one time called system", entity, vel)
+	})
+
 	sys = ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, vel *Velocity) {
 		log.Println("Velocity system", entity, vel)
+		// Velocity value of Entity is not changed as it is Readonly
 		vel.X++
 		vel.Y++
 	})
@@ -41,7 +46,8 @@ func main() {
 	ecsgo.Readonly[Velocity](sys)
 
 	sys = ecsgo.AddSystem2(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, pos *Position, vel *Velocity) {
-		log.Println("Position, Velocity system", entity, pos, vel)
+		log.Println("Position, Velocity system", entity, pos, vel, r.DeltaSeconds())
+		// Position value is not changed only Velocity value is changed
 		pos.X++
 		pos.Y++
 		vel.X++
@@ -55,5 +61,5 @@ func main() {
 	ecsgo.AddComponent(registry, entity, &Velocity{20, 20})
 	ecsgo.AddTag[EnemyTag](registry, entity)
 
-	registry.Run()
+	registry.Run(ecsgo.FPS(10), ecsgo.FixedTick(true))
 }

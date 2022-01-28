@@ -11,24 +11,29 @@ type isystem interface {
 	addIncludeTypes(tp reflect.Type, tag bool)
 	makeReadonly(tp reflect.Type)
 	isReadonly(tp reflect.Type) bool
+	isTemporary() bool
 }
 
 type includeTypeInfo struct {
-	tp reflect.Type
+	tp  reflect.Type
 	tag bool
 }
 
 type baseSystem struct {
-	r *Registry
+	r            *Registry
 	includeTypes []includeTypeInfo
 	excludeTypes []reflect.Type
-	readonlyMap map[reflect.Type]bool
+	readonlyMap  map[reflect.Type]bool
+	isTemp       bool
+	time         Ticktime
 }
 
-func newBaseSystem(r *Registry) *baseSystem {
+func newBaseSystem(r *Registry, time Ticktime, isTemporary bool) *baseSystem {
 	return &baseSystem{
 		r: r,
 		readonlyMap: make(map[reflect.Type]bool),
+		isTemp: isTemporary,
+		time: time,
 	}
 }
 
@@ -48,7 +53,6 @@ func (s *baseSystem) addIncludeTypes(tp reflect.Type, tag bool) {
 	s.includeTypes = append(s.includeTypes, includeTypeInfo{tp, tag})
 }
 
-
 func (s *baseSystem) makeReadonly(tp reflect.Type) {
 	s.readonlyMap[tp] = true
 }
@@ -61,15 +65,19 @@ func (s *baseSystem) query() []*unsafeTable {
 	return s.r.storage.query(s.includeTypes, s.excludeTypes)
 }
 
+func (s *baseSystem) isTemporary() bool {
+	return s.isTemp
+}
+
 // system non componenet system
 type system struct {
 	baseSystem
-	fn func (r *Registry)
+	fn          func (r *Registry)
 }
 
-func makeSystem(r *Registry, fn func (r *Registry)) isystem {
+func makeSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry)) isystem {
 	sys := &system{
-		baseSystem: *newBaseSystem(r),
+		baseSystem: *newBaseSystem(r, time, isTemporary),
 		fn: fn,
 	}
 	return sys
@@ -78,6 +86,9 @@ func makeSystem(r *Registry, fn func (r *Registry)) isystem {
 // run run system
 func (s *system) run() {
 	s.fn(s.r)
+	if s.isTemp {
+		s.r.defferredRemovesystem(s.time, s)
+	}
 }
 
 // system1 single value system
@@ -86,13 +97,13 @@ type system1[T any] struct {
 	fn func (*Registry, Entity, *T)
 }
 // makeSystem1 add single value system
-func makeSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) isystem {
+func makeSystem1[T any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, entity Entity, t *T)) isystem {
 	var zeroT T
 	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
 		panic(err)
 	}
 	sys := &system1[T]{
-		baseSystem: *newBaseSystem(r),
+		baseSystem: *newBaseSystem(r, time, isTemporary),
 		fn: fn,
 	}
 	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
@@ -118,6 +129,9 @@ func (s *system1[T]) run() {
 			s.fn(s.r, iter.entity(), ptrT)
 		}
 	}
+	if s.isTemp {
+		s.r.defferredRemovesystem(s.time, s)
+	}
 }
 
 // system2 two values system
@@ -127,7 +141,7 @@ type system2[T any, U any] struct {
 }
 
 // AddSystem2 add two values system
-func makeSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
+func makeSystem2[T any, U any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
 	var zeroT T
 	var zeroU U
 	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
@@ -138,7 +152,7 @@ func makeSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry,
 	}
 
 	sys := &system2[T, U]{
-		baseSystem: *newBaseSystem(r),
+		baseSystem: *newBaseSystem(r, time, isTemporary),
 		fn: fn,
 	}
 	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
@@ -172,5 +186,8 @@ func (s *system2[T, U]) run() {
 			}
 			s.fn(s.r, iter.entity(), ptrT, ptrU)
 		}
+	}
+	if s.isTemp {
+		s.r.defferredRemovesystem(s.time, s)
 	}
 }

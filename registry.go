@@ -8,22 +8,25 @@ import (
 type Ticktime int
 
 const (
-	PreTick Ticktime = iota
+	prepreTick Ticktime = iota
+	PreTick
 	OnTick
 	PostTick
+	postpostTick
 	ticktimeMax
 )
 
 // Registry main struct where has entities, systems and storages
 type Registry struct {
-	entities     []Entity
-	freelist     []Entity
-	storage      *storage
-	pipelines    [ticktimeMax]*pipeline
-	defferredMtx sync.Mutex
-	defferredSys []sysInfo
-	defferredCmp map[Entity][]*componentInfo
-	deltaSeconds float64
+	entities           []Entity
+	freelist           []Entity
+	storage            *storage
+	pipelines          [ticktimeMax]*pipeline
+	defferredMtx       sync.Mutex
+	defferredAddSys    []sysInfo
+	defferredCmp       map[Entity][]*componentInfo
+	defferredRemoveSys []sysInfo
+	deltaSeconds       float64
 }
 
 // New make new Registry
@@ -35,7 +38,8 @@ func New() *Registry {
 	for i := 0; i < int(ticktimeMax); i++ {
 		r.pipelines[i] = newPipeline()
 	}
-	r.pipelines[PreTick].addSystem(makeSystem(r, processDeferredProcess))
+	r.pipelines[prepreTick].addSystem(makeSystem(r, prepreTick, false, processPreProcess))
+	r.pipelines[postpostTick].addSystem(makeSystem(r, postpostTick, false, processPostProcess))
 	return r
 }
 
@@ -95,7 +99,7 @@ func (r *Registry) Run(opts ...option) {
 
 	var tick <-chan time.Time
 	if options.fps > 0 {
-		tick = time.Tick(time.Millisecond / time.Duration(options.fps))
+		tick = time.Tick(time.Second / time.Duration(options.fps))
 	}
 	lastTick := time.Now()
 	for {
@@ -118,11 +122,18 @@ type sysInfo struct {
 	system isystem
 }
 
-// addsystem add system in pipeline
+// defferredAddsystem add system in pipeline
 func (r *Registry) defferredAddsystem(time Ticktime, system isystem) {
 	r.defferredMtx.Lock()
 	defer r.defferredMtx.Unlock()
-	r.defferredSys = append(r.defferredSys, sysInfo{time, system})
+	r.defferredAddSys = append(r.defferredAddSys, sysInfo{time, system})
+}
+
+// defferredRemovesystem remove system in pipeline
+func (r *Registry) defferredRemovesystem(time Ticktime, system isystem) {
+	r.defferredMtx.Lock()
+	defer r.defferredMtx.Unlock()
+	r.defferredRemoveSys = append(r.defferredRemoveSys, sysInfo{time, system})
 }
 
 // addComponent is defferred until next pre tick
@@ -132,7 +143,7 @@ func (r *Registry) defferredAddComponent(ent Entity, cmpInfo *componentInfo) {
 	r.defferredCmp[ent] = append(r.defferredCmp[ent], cmpInfo)
 }
 
-func processDeferredProcess(r *Registry) {
+func processPreProcess(r *Registry) {
 	r.defferredMtx.Lock()
 	defer r.defferredMtx.Unlock()
 
@@ -141,8 +152,18 @@ func processDeferredProcess(r *Registry) {
 	}
 	r.defferredCmp = make(map[Entity][]*componentInfo)
 
-	for _, sysInfo := range r.defferredSys {
+	for _, sysInfo := range r.defferredAddSys {
 		r.pipelines[sysInfo.time].addSystem(sysInfo.system)
 	}
-	r.defferredSys = nil
+	r.defferredAddSys = nil
+}
+
+func processPostProcess(r *Registry) {
+	r.defferredMtx.Lock()
+	defer r.defferredMtx.Unlock()
+
+	for _, sysInfo := range r.defferredRemoveSys {
+		r.pipelines[sysInfo.time].removeSystem(sysInfo.system)
+	}
+	r.defferredRemoveSys = nil
 }

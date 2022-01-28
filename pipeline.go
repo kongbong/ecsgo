@@ -31,32 +31,58 @@ func (p *pipeline) addSystem(sys isystem) {
 		}
 		node, ok := p.depenMap[cmpInfo.tp]
 		if !ok {
+			// add empty root node
+			node = &pipeNode{}
+			p.depenMap[cmpInfo.tp] = node
+		}
+
+		for node.next != nil {
+			node = node.next
+		}
+		if node.readonly && sys.isReadonly(cmpInfo.tp) {
+			// read can overlapped
+			node.sysw = append(node.sysw, sysw)
+			sysw.nodes = append(sysw.nodes, node)
+		} else {
 			newNode := &pipeNode{
 				sysw:     []*sysWrapper{sysw},
 				donech:   make(chan bool),
 				readonly: sys.isReadonly(cmpInfo.tp),
 			}
-			p.depenMap[cmpInfo.tp] = newNode
+			node.next = newNode
+			newNode.prev = node
 			sysw.nodes = append(sysw.nodes, newNode)
-		} else {
-			for node.next != nil {
-				node = node.next
-			}
-			if node.readonly && sys.isReadonly(cmpInfo.tp) {
-				// read can overlapped
-				node.sysw = append(node.sysw, sysw)
-				sysw.nodes = append(sysw.nodes, node)
-			} else {
-				newNode := &pipeNode{
-					sysw:     []*sysWrapper{sysw},
-					donech:   make(chan bool),
-					readonly: sys.isReadonly(cmpInfo.tp),
-				}
-				node.next = newNode
-				sysw.nodes = append(sysw.nodes, newNode)
-			}
 		}
 		sysw.waitCnt++
+	}
+}
+
+func (p *pipeline) removeSystem(sys isystem) {
+	var sw *sysWrapper
+	for i, s := range p.sysw {
+		if s.sys == sys {
+			sw = s
+			p.sysw = append(p.sysw[:i], p.sysw[i+1:]...)
+			break
+		}
+	}
+
+	for _, n := range sw.nodes {
+		for i, s := range n.sysw {
+			if s == sw {
+				n.sysw = append(n.sysw[:i], n.sysw[i+1:]...)
+				break
+			}
+		}
+		if len(n.sysw) == 0 {
+			if n.prev == nil {
+				panic("n.prev should be not nil as root doesn't have any system")
+			}
+			n.prev.next = n.next
+			n.next.prev = n.prev
+			n.prev = nil
+			n.next = nil
+		}
 	}
 }
 
@@ -86,12 +112,14 @@ func runNodeline(n *pipeNode) {
 			<-n.donech
 			wc--
 		}
+
 		n = n.next
 	}
 }
 
 // pipeNode single dependency line
 type pipeNode struct {
+	prev     *pipeNode
 	next     *pipeNode
 	sysw     []*sysWrapper
 	donech   chan bool
@@ -118,7 +146,6 @@ func (s *sysWrapper) run(wg *sync.WaitGroup) {
 		n.donech <- true
 	}
 	wg.Done()
-
 }
 
 // newWrapper make new system wrapper

@@ -129,3 +129,34 @@ func TestECSGoReadOnly(t *testing.T) {
 	registry.tick(0.01)
 	wg.Wait()
 }
+
+func TestECSGoPostTask(t *testing.T) {
+	registry := New()
+	defer registry.Free()
+
+	var wg sync.WaitGroup
+	var called1 bool
+	wg.Add(2)
+	PostTask1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		log.Println("PostTask1 Position - this is called only one time")
+		assert.False(t, called1)
+		called1 = true
+		wg.Done()
+	})
+
+	AddSystem2[Position, Velocity](registry, OnTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
+		log.Println("Position, Velocity system - This is called every tick")
+		assert.True(t, called1)
+		wg.Done()
+	})
+
+	entity := registry.Create()
+	AddComponent[Position](registry, entity, &Position{10, 10})
+	AddComponent[Velocity](registry, entity, &Velocity{10, 10})
+
+	registry.tick(0.01)
+	wg.Wait()
+	wg.Add(1)
+	registry.tick(0.01)
+	wg.Wait()
+}

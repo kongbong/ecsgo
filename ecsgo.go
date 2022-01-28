@@ -7,21 +7,42 @@ import (
 
 // AddSystem add none component system
 func AddSystem(r *Registry, time Ticktime, fn func (r *Registry)) isystem {
-	sys := makeSystem(r, fn)
+	sys := makeSystem(r, time, false, fn)
+	r.defferredAddsystem(time, sys)
+	return sys
+}
+
+// PostTask add one-time called system - fn is called only one time
+func PostTask(r *Registry, time Ticktime, fn func (r *Registry)) isystem {
+	sys := makeSystem(r, time, true, fn)
 	r.defferredAddsystem(time, sys)
 	return sys
 }
 
 // AddSystem1 add single value system
 func AddSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) isystem {
-	sys := makeSystem1[T](r, time, fn)
+	sys := makeSystem1[T](r, time, false, fn)
+	r.defferredAddsystem(time, sys)
+	return sys
+}
+
+// PostTask1 add one-time called single component system - fn is called only one time
+func PostTask1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) isystem {
+	sys := makeSystem1[T](r, time, true, fn)
 	r.defferredAddsystem(time, sys)
 	return sys
 }
 
 // AddSystem2 add two values system
 func AddSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
-	sys := makeSystem2[T, U](r, time, fn)
+	sys := makeSystem2[T, U](r, time, false, fn)
+	r.defferredAddsystem(time, sys)
+	return sys
+}
+
+// PostTask2 add one-time called two components system - fn is called only one time
+func PostTask2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
+	sys := makeSystem2[T, U](r, time, true, fn)
 	r.defferredAddsystem(time, sys)
 	return sys
 }
