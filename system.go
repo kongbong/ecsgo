@@ -67,18 +67,11 @@ type system struct {
 	fn func (r *Registry)
 }
 
-func MakeSystem(r *Registry, fn func (r *Registry)) isystem {
+func makeSystem(r *Registry, fn func (r *Registry)) isystem {
 	sys := &system{
 		baseSystem: *newBaseSystem(r),
 		fn: fn,
 	}
-	return sys
-}
-
-// AddSystem add none component system
-func AddSystem(r *Registry, time Ticktime, fn func (r *Registry)) isystem {
-	sys := MakeSystem(r, fn)
-	r.defferredAddsystem(time, sys)
 	return sys
 }
 
@@ -92,9 +85,8 @@ type system1[T any] struct {
 	baseSystem
 	fn func (*Registry, Entity, *T)
 }
-
-// AddSystem1 add single value system
-func AddSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) isystem {
+// makeSystem1 add single value system
+func makeSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T)) isystem {
 	var zeroT T
 	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
 		panic(err)
@@ -104,7 +96,6 @@ func AddSystem1[T any](r *Registry, time Ticktime, fn func (r *Registry, entity 
 		fn: fn,
 	}
 	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
-	r.defferredAddsystem(time, sys)
 	return sys
 }
 
@@ -136,7 +127,7 @@ type system2[T any, U any] struct {
 }
 
 // AddSystem2 add two values system
-func AddSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
+func makeSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
 	var zeroT T
 	var zeroU U
 	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
@@ -152,7 +143,6 @@ func AddSystem2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, 
 	}
 	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
 	sys.addIncludeTypes(reflect.TypeOf(zeroU), false)
-	r.defferredAddsystem(time, sys)
 	return sys
 }
 
@@ -183,30 +173,4 @@ func (s *system2[T, U]) run() {
 			s.fn(s.r, iter.entity(), ptrT, ptrU)
 		}
 	}
-}
-
-func Exclude[T any](sys isystem) {
-	var zeroT T
-	sys.addExcludeTypes(reflect.TypeOf(zeroT))
-}
-
-func ExcludeTag[T any](sys isystem) {
-	var zeroT T
-	if err := checkTagType(reflect.TypeOf(zeroT)); err != nil {
-		panic(err)
-	}
-	sys.addExcludeTypes(reflect.TypeOf(zeroT))
-}
-
-func Tag[T any](sys isystem) {
-	var zeroT T
-	if err := checkTagType(reflect.TypeOf(zeroT)); err != nil {
-		panic(err)
-	}
-	sys.addIncludeTypes(reflect.TypeOf(zeroT), true)
-}
-
-func Readonly[T any](sys isystem) {
-	var zeroT T
-	sys.makeReadonly(reflect.TypeOf(zeroT))
 }

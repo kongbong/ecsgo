@@ -1,36 +1,10 @@
 package ecsgo
 
 import (
-	"unsafe"
-	"reflect"
 	"fmt"
+	"reflect"
+	"unsafe"
 )
-
-// SetEntityComponent1 store entity data into storage
-func AddComponent[T any](r *Registry, entity Entity, v *T) error {
-	if err := checkType(reflect.TypeOf(*v)); err != nil {
-		return err
-	}
-	cmpInfo := &componentInfo{
-		tp: reflect.TypeOf(*v),
-		v: v,
-		ptr: unsafe.Pointer(v),
-	}
-	r.defferredAddComponent(entity, cmpInfo)
-	return nil
-}
-
-func AddTag[T any](r *Registry, entity Entity) error {
-	var zeroT T
-	if err := checkTagType(reflect.TypeOf(zeroT)); err != nil {
-		return err
-	}
-	tagInfo := &componentInfo{
-		tp: reflect.TypeOf(zeroT),
-	}
-	r.defferredAddComponent(entity, tagInfo)
-	return nil
-}
 
 func checkType(tp reflect.Type) error {
 	if tp.Size() == 0 {
@@ -61,7 +35,7 @@ func checkTagType(tp reflect.Type) error {
 }
 
 type componentInfo struct {
-	tp reflect.Type
-	v interface{}
+	tp  reflect.Type
+	v   interface{}
 	ptr unsafe.Pointer
 }

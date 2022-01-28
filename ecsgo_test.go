@@ -89,7 +89,7 @@ func TestECSGo(t *testing.T) {
 	AddComponent[Position](registry, entity, &Position{100, 100})
 	AddTag[EnemyTag](registry, entity)
 
-	registry.Run()
+	registry.tick(0.01)
 	wg.Wait()
 }
 
@@ -126,6 +126,6 @@ func TestECSGoReadOnly(t *testing.T) {
 	AddComponent[Position](registry, entity, &Position{10, 10})
 	AddComponent[Velocity](registry, entity, &Velocity{10, 10})
 
-	registry.Run()
+	registry.tick(0.01)
 	wg.Wait()
 }

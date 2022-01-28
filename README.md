@@ -40,7 +40,7 @@ func main() {
     sys := ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, pos *Position) {
         log.Println("This should not called as Entity has Velocity component")
     })
-    ecsgo.ExcludeTag[EnemyTag](sys)
+    ecsgo.Exclude[EnemyTag](sys)
 
     sys = ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, vel *Velocity) {
         log.Println("Velocity system", entity, vel)
