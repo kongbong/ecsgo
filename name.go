@@ -13,13 +13,13 @@ type Name struct {
 
 var idxMap sync.Map
 var strMap sync.Map
-var lastIdx int32
+var lastNameIdx int32
 
 func NewName(str string) Name {
 	if val, ok := strMap.Load(str); ok {
 		return Name{idx: val.(int32)}
 	}
-	idx := atomic.AddInt32(&lastIdx, 1)
+	idx := atomic.AddInt32(&lastNameIdx, 1)
 	idxMap.Store(idx, str)
 	strMap.Store(str, idx)
 	return Name{idx: idx}

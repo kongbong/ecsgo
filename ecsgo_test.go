@@ -161,3 +161,50 @@ func TestECSGoPostTask(t *testing.T) {
 	registry.tick(0.01)
 	wg.Wait()
 }
+
+type ArrayComponent struct {
+	intArr Array[int]
+	nameStr Name
+	dynamicStr String
+}
+
+func TestECSGoArrayName(t *testing.T) {
+	registry := New()
+	defer registry.Free()
+
+	var wg sync.WaitGroup
+	called := false
+	wg.Add(1)
+	AddSystem1[ArrayComponent](registry, OnTick, func (r *Registry, entity Entity, arr *ArrayComponent) {
+		if !called {
+			called = true
+			assert.Equal(t, 1, arr.intArr.Len())
+			assert.Equal(t, 10, arr.intArr.Get(0))
+			assert.Equal(t, "Hello", arr.nameStr.String())
+			assert.Equal(t, "Hello", arr.dynamicStr.String())
+			arr.intArr.Add(100)
+			arr.nameStr = NewName("World")
+			arr.dynamicStr.Set("World")
+		} else {
+			assert.Equal(t, 2, arr.intArr.Len())
+			assert.Equal(t, 10, arr.intArr.Get(0))
+			assert.Equal(t, 100, arr.intArr.Get(1))
+			assert.Equal(t, "World", arr.nameStr.String())
+			assert.Equal(t, "World", arr.dynamicStr.String())
+		}	
+		wg.Done()
+	})
+
+	entity := registry.Create()
+	AddComponent[ArrayComponent](registry, entity, &ArrayComponent{
+		intArr: NewArrayFromSlice([]int{10}),
+		nameStr: NewName("Hello"),
+		dynamicStr: NewString("Hello"),
+	})
+
+	registry.tick(0.01)
+	wg.Wait()
+	wg.Add(1)
+	registry.tick(0.01)
+	wg.Wait()
+}
