@@ -27,6 +27,7 @@ type Registry struct {
 	defferredCmp       map[Entity][]*componentInfo
 	defferredRemoveSys []sysInfo
 	deltaSeconds       float64
+	sysDeltaSeconds    float64
 }
 
 // New make new Registry
@@ -77,7 +78,11 @@ func (r *Registry) Release(e Entity) {
 }
 
 func (r *Registry) DeltaSeconds() float64 {
-	return r.deltaSeconds
+	return r.sysDeltaSeconds
+}
+
+func (r *Registry) setSystemDeltaSeconds(val float64) {
+	r.sysDeltaSeconds = val
 }
 
 // Run run systems

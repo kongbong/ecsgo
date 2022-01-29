@@ -12,6 +12,7 @@ type isystem interface {
 	makeReadonly(tp reflect.Type)
 	isReadonly(tp reflect.Type) bool
 	isTemporary() bool
+	SetTickInterval(intervalSecond float64)
 }
 
 type includeTypeInfo struct {
@@ -20,12 +21,14 @@ type includeTypeInfo struct {
 }
 
 type baseSystem struct {
-	r            *Registry
-	includeTypes []includeTypeInfo
-	excludeTypes []reflect.Type
-	readonlyMap  map[reflect.Type]bool
-	isTemp       bool
-	time         Ticktime
+	r               *Registry
+	includeTypes    []includeTypeInfo
+	excludeTypes    []reflect.Type
+	readonlyMap     map[reflect.Type]bool
+	isTemp          bool
+	time            Ticktime
+	intervalSeconds float64
+	elapsedSeconds  float64
 }
 
 func newBaseSystem(r *Registry, time Ticktime, isTemporary bool) *baseSystem {
@@ -69,6 +72,20 @@ func (s *baseSystem) isTemporary() bool {
 	return s.isTemp
 }
 
+func (s *baseSystem) SetTickInterval(intervalSeconds float64) {
+	s.intervalSeconds = intervalSeconds
+}
+
+func (s *baseSystem) exceedTickInterval() bool {
+	s.elapsedSeconds += s.r.deltaSeconds
+	if s.elapsedSeconds >= s.intervalSeconds {
+		s.r.setSystemDeltaSeconds(s.elapsedSeconds)
+		s.elapsedSeconds = 0
+		return true
+	}
+	return false
+}
+
 // system non componenet system
 type system struct {
 	baseSystem
@@ -85,6 +102,9 @@ func makeSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Regist
 
 // run run system
 func (s *system) run() {
+	if !s.exceedTickInterval() {
+		return
+	}
 	s.fn(s.r)
 	if s.isTemp {
 		s.r.defferredRemovesystem(s.time, s)
@@ -112,6 +132,9 @@ func makeSystem1[T any](r *Registry, time Ticktime, isTemporary bool, fn func (r
 
 // run run system
 func (s *system1[T]) run() {
+	if !s.exceedTickInterval() {
+		return
+	}
 	var zeroT T
 	typeT := reflect.TypeOf(zeroT)
 	tables := s.query()
@@ -162,6 +185,9 @@ func makeSystem2[T any, U any](r *Registry, time Ticktime, isTemporary bool, fn 
 
 // run run system
 func (s *system2[T, U]) run() {
+	if !s.exceedTickInterval() {
+		return
+	}
 	var zeroT T
 	var zeroU U
 	typeT := reflect.TypeOf(zeroT)

@@ -53,6 +53,7 @@ func main() {
 		vel.X++
 		vel.Y++
 	})
+	sys.SetTickInterval(1)
 	ecsgo.Tag[EnemyTag](sys)
 	ecsgo.Readonly[Position](sys)
 

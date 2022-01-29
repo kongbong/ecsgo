@@ -119,6 +119,7 @@ func TestECSGoReadOnly(t *testing.T) {
 	AddSystem2[Position, Velocity](registry, OnTick, func (r *Registry, entity Entity, pos *Position, vel *Velocity) {
 		log.Println("Position, Velocity system")
 		assert.True(t, called1)
+		assert.Equal(t, 0.01, r.DeltaSeconds())
 		wg.Done()
 	})
 
