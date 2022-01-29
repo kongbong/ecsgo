@@ -18,43 +18,75 @@ func newPipeline() *pipeline {
 	}
 }
 
+// pipeNode single dependency line
+type pipeNode struct {
+	prev        *pipeNode
+	next        *pipeNode
+	sysw        []*sysWrapper
+	donech      chan bool
+	readonly    bool
+	maxPriority int
+}
+
+// sysWrapper system wrapper for waiting dependent systems done
+type sysWrapper struct {
+	sys     isystem
+	waitCnt int
+	waitch  chan bool
+	nodes   []*pipeNode
+}
+
 // addSystem adding system in pipeline, analyzing dependency and making tree
 func (p *pipeline) addSystem(sys isystem) {
-	types := sys.getIncludeTypes()
+	types := sys.getDependencyTypes()
 	sysw := newWrapper(sys)
 	p.sysw = append(p.sysw, sysw)
 
-	for _, cmpInfo := range types {
-		if cmpInfo.tag {
-			// tag doesn't make dependency
-			continue
-		}
-		node, ok := p.depenMap[cmpInfo.tp]
+	for _, tp := range types {
+		node, ok := p.depenMap[tp]
 		if !ok {
 			// add empty root node
 			node = &pipeNode{}
-			p.depenMap[cmpInfo.tp] = node
+			p.depenMap[tp] = node
 		}
 
+		inserted := false
 		for node.next != nil {
 			node = node.next
-		}
-		if node.readonly && sys.isReadonly(cmpInfo.tp) {
-			// read can overlapped
-			node.sysw = append(node.sysw, sysw)
-			sysw.nodes = append(sysw.nodes, node)
-		} else {
-			newNode := &pipeNode{
-				sysw:     []*sysWrapper{sysw},
-				donech:   make(chan bool),
-				readonly: sys.isReadonly(cmpInfo.tp),
+			if sys.getPriority() > node.maxPriority {
+				if node.readonly && sys.isReadonly(tp) {
+					// read can overlapped
+					node.addSysw(sysw)
+				} else {
+					insertNode(sysw, sys.isReadonly(tp), node.prev, node)
+				}
+				inserted = true
+				break
 			}
-			node.next = newNode
-			newNode.prev = node
-			sysw.nodes = append(sysw.nodes, newNode)
+		}
+
+		if !inserted {
+			if node.readonly && sys.isReadonly(tp) {
+				// read can overlapped
+				node.addSysw(sysw)
+			} else {
+				insertNode(sysw, sys.isReadonly(tp), node, nil)
+			}
 		}
 		sysw.waitCnt++
 	}
+}
+
+func insertNode(sysw *sysWrapper, readonly bool, prev, next *pipeNode) {
+	newNode := &pipeNode{
+		sysw:     []*sysWrapper{sysw},
+		donech:   make(chan bool),
+		readonly: readonly,
+	}
+	prev.next = newNode
+	newNode.prev = prev
+	newNode.next = next
+	sysw.nodes = append(sysw.nodes, newNode)
 }
 
 func (p *pipeline) removeSystem(sys isystem) {
@@ -117,21 +149,13 @@ func runNodeline(n *pipeNode) {
 	}
 }
 
-// pipeNode single dependency line
-type pipeNode struct {
-	prev     *pipeNode
-	next     *pipeNode
-	sysw     []*sysWrapper
-	donech   chan bool
-	readonly bool
-}
-
-// sysWrapper system wrapper for waiting dependent systems done
-type sysWrapper struct {
-	sys     isystem
-	waitCnt int
-	waitch  chan bool
-	nodes   []*pipeNode
+func (node *pipeNode) addSysw(sysw *sysWrapper) {
+	// read can overlapped
+	node.sysw = append(node.sysw, sysw)
+	sysw.nodes = append(sysw.nodes, node)
+	if sysw.sys.getPriority() > node.maxPriority {
+		node.maxPriority = sysw.sys.getPriority()
+	}
 }
 
 // run run systemWrapper

@@ -4,31 +4,35 @@ import "reflect"
 
 // isystem system interface
 type isystem interface {
+	
+	SetTickInterval(intervalSecond float64)
+	SetPriority(priority int)
+
 	run()
-	getIncludeTypes() []includeTypeInfo
+	getIncludeTypes() []reflect.Type
+	getDependencyTypes() []reflect.Type
 	getExcludeTypes() []reflect.Type
-	addExcludeTypes(tp reflect.Type)
-	addIncludeTypes(tp reflect.Type, tag bool)
+	addExcludeType(tp reflect.Type)
+	addIncludeType(tp reflect.Type)
+	addTagType(tp reflect.Type)
+	addDependencyType(tp reflect.Type)
 	makeReadonly(tp reflect.Type)
 	isReadonly(tp reflect.Type) bool
 	isTemporary() bool
-	SetTickInterval(intervalSecond float64)
-}
-
-type includeTypeInfo struct {
-	tp  reflect.Type
-	tag bool
+	getPriority() int
 }
 
 type baseSystem struct {
 	r               *Registry
-	includeTypes    []includeTypeInfo
+	includeTypes    []reflect.Type
+	dependencyTypes []reflect.Type
 	excludeTypes    []reflect.Type
 	readonlyMap     map[reflect.Type]bool
 	isTemp          bool
 	time            Ticktime
 	intervalSeconds float64
 	elapsedSeconds  float64
+	priority        int
 }
 
 func newBaseSystem(r *Registry, time Ticktime, isTemporary bool) *baseSystem {
@@ -40,20 +44,33 @@ func newBaseSystem(r *Registry, time Ticktime, isTemporary bool) *baseSystem {
 	}
 }
 
-func (s *baseSystem) getIncludeTypes() []includeTypeInfo {
+func (s *baseSystem) getIncludeTypes() []reflect.Type {
 	return s.includeTypes
+}
+
+func (s *baseSystem) getDependencyTypes() []reflect.Type {
+	return s.dependencyTypes
 }
 
 func (s *baseSystem) getExcludeTypes() []reflect.Type {
 	return s.excludeTypes
 }
 
-func (s *baseSystem) addExcludeTypes(tp reflect.Type) {
+func (s *baseSystem) addExcludeType(tp reflect.Type) {
 	s.excludeTypes = append(s.excludeTypes, tp)
 }
 
-func (s *baseSystem) addIncludeTypes(tp reflect.Type, tag bool) {
-	s.includeTypes = append(s.includeTypes, includeTypeInfo{tp, tag})
+func (s *baseSystem) addIncludeType(tp reflect.Type) {
+	s.includeTypes = append(s.includeTypes, tp)
+	s.dependencyTypes = append(s.dependencyTypes, tp)
+}
+
+func (s *baseSystem) addTagType(tp reflect.Type) {
+	s.includeTypes = append(s.includeTypes, tp)
+}
+
+func (s *baseSystem) addDependencyType(tp reflect.Type) {
+	s.dependencyTypes = append(s.dependencyTypes, tp)
 }
 
 func (s *baseSystem) makeReadonly(tp reflect.Type) {
@@ -84,6 +101,14 @@ func (s *baseSystem) exceedTickInterval() bool {
 		return true
 	}
 	return false
+}
+
+func (s *baseSystem) SetPriority(priority int) {
+	s.priority = priority
+}
+
+func (s *baseSystem) getPriority() int {
+	return s.priority
 }
 
 // system non componenet system
@@ -126,7 +151,7 @@ func makeSystem1[T any](r *Registry, time Ticktime, isTemporary bool, fn func (r
 		baseSystem: *newBaseSystem(r, time, isTemporary),
 		fn: fn,
 	}
-	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
+	sys.addIncludeType(reflect.TypeOf(zeroT))
 	return sys
 }
 
@@ -178,8 +203,8 @@ func makeSystem2[T any, U any](r *Registry, time Ticktime, isTemporary bool, fn 
 		baseSystem: *newBaseSystem(r, time, isTemporary),
 		fn: fn,
 	}
-	sys.addIncludeTypes(reflect.TypeOf(zeroT), false)
-	sys.addIncludeTypes(reflect.TypeOf(zeroU), false)
+	sys.addIncludeType(reflect.TypeOf(zeroT))
+	sys.addIncludeType(reflect.TypeOf(zeroU))
 	return sys
 }
 

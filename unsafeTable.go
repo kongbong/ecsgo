@@ -58,12 +58,12 @@ func (t *unsafeTable) erase(ent Entity) {
 	t.spMap.Erase(ent.id)
 }
 
-func (t *unsafeTable) find(ent Entity) *typeGetter {
+func (t *unsafeTable) find(ent Entity) *typeGetAndSet {
 	ptr, _ := t.spMap.Find(ent.id)
 	if *((*Entity)(ptr)) != ent {
 		return nil
 	}
-	return &typeGetter{
+	return &typeGetAndSet{
 		ptr: ptr,
 		typeOffMap: t.typeOffMap,
 	}
@@ -87,12 +87,12 @@ func (t *unsafeTable) insert(ent Entity, valMap map[reflect.Type]unsafe.Pointer)
 	C.free(ptr)
 }
 
-type typeGetter struct {
+type typeGetAndSet struct {
 	ptr unsafe.Pointer
 	typeOffMap map[reflect.Type]int
 }
 
-func (g *typeGetter) get(t reflect.Type) unsafe.Pointer {
+func (g *typeGetAndSet) get(t reflect.Type) unsafe.Pointer {
 	if uintptr(g.ptr) == 0 {
 		panic("ptr is nil")
 	}
@@ -103,6 +103,11 @@ func (g *typeGetter) get(t reflect.Type) unsafe.Pointer {
 	return unsafe.Add(g.ptr, off)
 }
 
+func (g *typeGetAndSet) set(t reflect.Type, val unsafe.Pointer) {
+	ptr := g.get(t)
+	C.memcpy(ptr, val, C.size_t(unsafe.Sizeof(t.Size())))
+}
+
 // iterator get iterator
 func (t *unsafeTable) iterator() *tableIter {
 	return newTableIter(t.spMap.Iterate(), t.typeOffMap)
@@ -111,13 +116,13 @@ func (t *unsafeTable) iterator() *tableIter {
 // iiter iterator interface
 type tableIter struct {
 	iter *sparseMap.UnsafeIter
-	getter typeGetter
+	getter typeGetAndSet
 }
 
 func newTableIter(iter *sparseMap.UnsafeIter, typeOffMap map[reflect.Type]int) *tableIter {
 	return &tableIter{
 		iter: iter,
-		getter: typeGetter{
+		getter: typeGetAndSet{
 			ptr: iter.Get(),
 			typeOffMap: typeOffMap,
 		},

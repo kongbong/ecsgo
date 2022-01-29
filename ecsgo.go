@@ -1,8 +1,9 @@
 package ecsgo
 
 import (
-	"unsafe"
+	"fmt"
 	"reflect"
+	"unsafe"
 )
 
 // AddSystem add none component system
@@ -49,7 +50,7 @@ func PostTask2[T any, U any](r *Registry, time Ticktime, fn func (r *Registry, e
 
 func Exclude[T any](sys isystem) {
 	var zeroT T
-	sys.addExcludeTypes(reflect.TypeOf(zeroT))
+	sys.addExcludeType(reflect.TypeOf(zeroT))
 }
 
 func Tag[T any](sys isystem) {
@@ -57,12 +58,21 @@ func Tag[T any](sys isystem) {
 	if err := checkTagType(reflect.TypeOf(zeroT)); err != nil {
 		panic(err)
 	}
-	sys.addIncludeTypes(reflect.TypeOf(zeroT), true)
+	sys.addTagType(reflect.TypeOf(zeroT))
 }
 
 func Readonly[T any](sys isystem) {
 	var zeroT T
 	sys.makeReadonly(reflect.TypeOf(zeroT))
+}
+
+// AddDependency add a dependency of T, system needs this when the system needs set/get other entity's other component value
+func AddDependency[T any](sys isystem, readonly bool) {
+	var zeroT T
+	sys.addDependencyType(reflect.TypeOf(zeroT))
+	if readonly {
+		Readonly[T](sys)
+	}
 }
 
 // AddComponent add component into entity
@@ -77,6 +87,52 @@ func AddComponent[T any](r *Registry, entity Entity, v *T) error {
 	}
 	r.defferredAddComponent(entity, cmpInfo)
 	return nil
+}
+
+// Set sets component value
+// This can be used for setting other entity's value
+// The system called this function needs to add write Dependaency of T
+func Set[T any](r *Registry, entity Entity, v *T) error {
+	if err := checkType(reflect.TypeOf(*v)); err != nil {
+		return err
+	}
+	cmpInfo := &componentInfo{
+		tp: reflect.TypeOf(*v),
+		v: v,
+		ptr: unsafe.Pointer(v),
+	}
+	r.storage.setValue(entity, cmpInfo)
+	return nil
+}
+
+// Get Gets component value
+// This can be used for getting other entity's value
+// The system called this function needs to add write Dependaency of T
+func Get[T any](r *Registry, entity Entity) *T {
+	var zeroT T
+	tp := reflect.TypeOf(zeroT)
+	if err := checkType(tp); err != nil {
+		return nil
+	}
+	ptr := r.storage.getValue(entity, tp)
+	return (*T)(ptr)
+}
+
+// GetValue Gets component value (readonly)
+// This can be used for getting other entity's value
+// The system called this function needs to add read Dependaency of T
+func GetValue[T any](r *Registry, entity Entity) (T, error) {
+	var zeroT T
+	tp := reflect.TypeOf(zeroT)
+	if err := checkType(tp); err != nil {
+		return zeroT, err
+	}
+	ptr := r.storage.getValue(entity, tp)
+	if ptr != nil {
+		zeroT = (*(*T)(ptr))
+		return zeroT, nil
+	}
+	return zeroT, fmt.Errorf("entity data is removed")
 }
 
 // AddTag add a tag into entity, tag is same with empty size Component

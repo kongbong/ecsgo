@@ -17,10 +17,14 @@ func checkType(tp reflect.Type) error {
 	case reflect.Struct:
 		// need to check every fields
 		for i := 0; i < tp.NumField(); i++ {
-			err := checkType(tp.Field(i).Type)
-			if err != nil {
+			if err := checkType(tp.Field(i).Type); err != nil {
 				return err
 			}
+		}
+	case reflect.Array:
+		elemType := tp.Elem()
+		if err := checkType(elemType); err != nil {
+			return err
 		}
 	}
 	return nil

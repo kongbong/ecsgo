@@ -23,13 +23,13 @@ func (s *storage) free() {
 	}
 }
 
-func (s *storage) query(includeTypes []includeTypeInfo, excludeTypes []reflect.Type) []*unsafeTable {
+func (s *storage) query(includeTypes []reflect.Type, excludeTypes []reflect.Type) []*unsafeTable {
 	var rst []*unsafeTable
 
 	for _, t := range s.tables {
 		found := true
-		for _, cmpInfo := range includeTypes {
-			if !t.hasType(cmpInfo.tp) {
+		for _, tp := range includeTypes {
+			if !t.hasType(tp) {
 				found = false
 				break
 			}
@@ -96,4 +96,35 @@ func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 		prevTb.erase(ent)
 	}
 	s.entityMap[ent] = tb
+}
+
+func (s *storage) setValue(ent Entity, c *componentInfo) {
+	prevTb, ok := s.entityMap[ent]
+	if !ok {
+		panic("Entity doesn't have any components")
+	}
+	getter := prevTb.find(ent)
+	if getter == nil {
+		// already removed, weird
+		panic("entity data is removed")
+	}
+	if c.tp.Size() > 0 {
+		getter.set(c.tp, c.ptr)
+	}
+}
+
+func (s *storage) getValue(ent Entity, tp reflect.Type) unsafe.Pointer {
+	prevTb, ok := s.entityMap[ent]
+	if !ok {
+		panic("Entity doesn't have any components")
+	}
+	getter := prevTb.find(ent)
+	if getter == nil {
+		// already removed, weird
+		panic("entity data is removed")
+	}
+	if tp.Size() > 0 {
+		return getter.get(tp)
+	}
+	return nil
 }

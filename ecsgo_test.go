@@ -32,7 +32,7 @@ type EmptySizeComponent struct {}
 
 type EnemyTag struct {}
 
-func TestECSGo(t *testing.T) {
+func TestBasic(t *testing.T) {
 	registry := New()
 	defer registry.Free()
 
@@ -94,7 +94,7 @@ func TestECSGo(t *testing.T) {
 }
 
 
-func TestECSGoReadOnly(t *testing.T) {
+func TestReadOnly(t *testing.T) {
 	registry := New()
 	defer registry.Free()
 
@@ -131,7 +131,7 @@ func TestECSGoReadOnly(t *testing.T) {
 	wg.Wait()
 }
 
-func TestECSGoPostTask(t *testing.T) {
+func TestPostTask(t *testing.T) {
 	registry := New()
 	defer registry.Free()
 
@@ -168,7 +168,7 @@ type ArrayComponent struct {
 	dynamicStr String
 }
 
-func TestECSGoArrayName(t *testing.T) {
+func TestArrayName(t *testing.T) {
 	registry := New()
 	defer registry.Free()
 
@@ -200,6 +200,88 @@ func TestECSGoArrayName(t *testing.T) {
 		intArr: NewArrayFromSlice([]int{10}),
 		nameStr: NewName("Hello"),
 		dynamicStr: NewString("Hello"),
+	})
+
+	registry.tick(0.01)
+	wg.Wait()
+	wg.Add(1)
+	registry.tick(0.01)
+	wg.Wait()
+}
+
+type OtherEntity struct {
+	other Entity
+}
+
+func TestDependency(t *testing.T) {
+	registry := New()
+	defer registry.Free()
+
+	var wg sync.WaitGroup
+	called := false
+	wg.Add(2)
+	sys := AddSystem1[OtherEntity](registry, OnTick, func (r *Registry, entity Entity, other *OtherEntity) {
+		assert.False(t, called)
+		pos := Get[Position](r, other.other)
+		assert.NotNil(t, pos)
+		pos.X += 100
+		pos.Y += 100
+		time.Sleep(time.Second)
+		called = true
+		wg.Done()
+	})
+	AddDependency[Position](sys, false)
+
+	AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		assert.True(t, called)
+		assert.Equal(t, float32(200), pos.X)
+		assert.Equal(t, float32(200), pos.Y)
+		wg.Done()
+	})
+
+	entity := registry.Create()
+	AddComponent[Position](registry, entity, &Position{
+		X: 100,
+		Y: 100,
+	})
+
+	entity2 := registry.Create()
+	AddComponent[OtherEntity](registry, entity2, &OtherEntity{
+		other: entity,
+	})
+
+	registry.tick(0.01)
+	wg.Wait()
+}
+
+func TestPriority(t *testing.T) {
+	registry := New()
+	defer registry.Free()
+
+	var wg sync.WaitGroup
+	called := false
+	wg.Add(2)
+	AddSystem1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		assert.True(t, called)
+		assert.Equal(t, float32(200), pos.X)
+		assert.Equal(t, float32(200), pos.Y)
+		wg.Done()
+	})
+
+	sys := PostTask1[Position](registry, OnTick, func (r *Registry, entity Entity, pos *Position) {
+		assert.False(t, called)
+		pos.X += 100
+		pos.Y += 100
+		time.Sleep(time.Second)
+		called = true
+		wg.Done()
+	})
+	sys.SetPriority(999)
+
+	entity := registry.Create()
+	AddComponent[Position](registry, entity, &Position{
+		X: 100,
+		Y: 100,
 	})
 
 	registry.tick(0.01)
