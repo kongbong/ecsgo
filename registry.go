@@ -39,8 +39,8 @@ func New() *Registry {
 	for i := 0; i < int(ticktimeMax); i++ {
 		r.pipelines[i] = newPipeline()
 	}
-	r.pipelines[prepreTick].addSystem(makeSystem(r, prepreTick, false, processPreProcess))
-	r.pipelines[postpostTick].addSystem(makeSystem(r, postpostTick, false, processPostProcess))
+	r.pipelines[prepreTick].addSystem(makeNonComponentSystem(r, prepreTick, false, processPreProcess))
+	r.pipelines[postpostTick].addSystem(makeNonComponentSystem(r, postpostTick, false, processPostProcess))
 	return r
 }
 
@@ -86,7 +86,7 @@ func (r *Registry) setSystemDeltaSeconds(val float64) {
 }
 
 // Run run systems
-func (r *Registry) tick(deltaSeconds float64) {
+func (r *Registry) Tick(deltaSeconds float64) {
 	r.deltaSeconds = deltaSeconds
 	var wg sync.WaitGroup
 	for i := 0; i < int(ticktimeMax); i++ {
@@ -117,7 +117,7 @@ func (r *Registry) Run(opts ...option) {
 		if options.fixedTick {
 			interval = 1 / float64(options.fps)
 		}
-		r.tick(interval)
+		r.Tick(interval)
 		lastTick = now
 	}
 }

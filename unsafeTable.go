@@ -12,6 +12,12 @@ import (
 	"github.com/kongbong/ecsgo/sparseMap"
 )
 
+type flag uint8
+const (
+	Alive flag = 0
+	Deleted flag = 1
+)
+
 type unsafeTable struct {
 	spMap *sparseMap.UnsafeMap[uint32]	
 	typeOffMap map[reflect.Type]int
@@ -26,7 +32,7 @@ func newTable(types ...reflect.Type) *unsafeTable {
 	dataSize := int(unsafe.Sizeof(ent))
 	for _, t := range types {			
 		tb.typeOffMap[t] = dataSize	
-		dataSize += int(t.Size())
+		dataSize += int(t.Size()+1) // for flag
 	}
 	tb.spMap = sparseMap.NewUnsafeAutoIncresing[uint32](dataSize, 100)
 	return tb
@@ -69,6 +75,15 @@ func (t *unsafeTable) find(ent Entity) *typeGetAndSet {
 	}
 }
 
+func memCopy(dst, src unsafe.Pointer, size uintptr) {
+	if uintptr(src) == 0 {
+		C.memset(dst, C.int(Deleted), C.size_t(1))
+	} else {
+		C.memset(dst, C.int(Alive), C.size_t(1))
+		C.memcpy(unsafe.Add(dst, 1), src, C.size_t(size))
+	}
+}
+
 func (t *unsafeTable) insert(ent Entity, valMap map[reflect.Type]unsafe.Pointer) {
 	sz := t.spMap.ValueSize()
 	ptr := unsafe.Pointer(C.malloc(C.size_t(sz)))
@@ -76,7 +91,7 @@ func (t *unsafeTable) insert(ent Entity, valMap map[reflect.Type]unsafe.Pointer)
 
 	for tp, off := range t.typeOffMap {
 		if tp.Size() > 0 {
-			C.memcpy(unsafe.Add(ptr, off), valMap[tp], C.size_t(tp.Size()))
+			memCopy(unsafe.Add(ptr, off), valMap[tp], tp.Size())
 		}
 	}
 
@@ -92,7 +107,7 @@ type typeGetAndSet struct {
 	typeOffMap map[reflect.Type]int
 }
 
-func (g *typeGetAndSet) get(t reflect.Type) unsafe.Pointer {
+func (g *typeGetAndSet) getPtr(t reflect.Type) unsafe.Pointer {
 	if uintptr(g.ptr) == 0 {
 		panic("ptr is nil")
 	}
@@ -103,9 +118,18 @@ func (g *typeGetAndSet) get(t reflect.Type) unsafe.Pointer {
 	return unsafe.Add(g.ptr, off)
 }
 
+func (g *typeGetAndSet) get(t reflect.Type) unsafe.Pointer {
+	ptr := g.getPtr(t)
+	flag := flag(*(*uint8)(ptr))
+	if flag == Deleted {
+		return nil
+	}
+	return unsafe.Add(ptr, 1)
+}
+
 func (g *typeGetAndSet) set(t reflect.Type, val unsafe.Pointer) {
-	ptr := g.get(t)
-	C.memcpy(ptr, val, C.size_t(unsafe.Sizeof(t.Size())))
+	ptr := g.getPtr(t)
+	memCopy(ptr, val, t.Size())
 }
 
 // iterator get iterator

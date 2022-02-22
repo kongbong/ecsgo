@@ -27,31 +27,42 @@ func main() {
 	registry := ecsgo.New()
 	defer registry.Free() // need to call before remove registry to free C malloc memory
 
-	sys := ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, pos *Position) {
+	sys := ecsgo.AddSystem1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
 		log.Println("This should not called as Entity has Velocity component")
 	})
 	ecsgo.Exclude[EnemyTag](sys)
 
-	ecsgo.PostTask1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, vel *Velocity) {
-		log.Println("This is one time called system", entity, vel)
+	ecsgo.PostTask1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
+		for ; !iter.IsNil(); iter.Next() {
+			vel := ecsgo.Get[Velocity](iter)
+			log.Println("This is one time called system", iter.Entity(), vel)
+		}
+		
 	})
 
-	sys = ecsgo.AddSystem1(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, vel *Velocity) {
-		log.Println("Velocity system", entity, vel)
-		// Velocity value of Entity is not changed as it is Readonly
-		vel.X++
-		vel.Y++
+	sys = ecsgo.AddSystem1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
+		for ; !iter.IsNil(); iter.Next() {
+			vel := ecsgo.Get[Velocity](iter)
+			log.Println("Velocity system", iter.Entity(), vel)
+			// Velocity value of Entity is not changed as it is Readonly
+			vel.X++
+			vel.Y++
+		}
 	})
 	ecsgo.Exclude[HP](sys)
 	ecsgo.Readonly[Velocity](sys)
 
-	sys = ecsgo.AddSystem2(registry, ecsgo.OnTick, func(r *ecsgo.Registry, entity ecsgo.Entity, pos *Position, vel *Velocity) {
-		log.Println("Position, Velocity system", entity, pos, vel, r.DeltaSeconds())
-		// Position value is not changed only Velocity value is changed
-		pos.X++
-		pos.Y++
-		vel.X++
-		vel.Y++
+	sys = ecsgo.AddSystem2[Position, Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
+		for ; !iter.IsNil(); iter.Next() {
+			pos := ecsgo.Get[Position](iter)
+			vel := ecsgo.Get[Velocity](iter)
+			log.Println("Position, Velocity system", iter.Entity(), pos, vel, r.DeltaSeconds())
+			// Position value is not changed only Velocity value is changed
+			pos.X++
+			pos.Y++
+			vel.X++
+			vel.Y++
+		}
 	})
 	sys.SetTickInterval(1)
 	ecsgo.Tag[EnemyTag](sys)

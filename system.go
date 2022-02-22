@@ -1,6 +1,9 @@
 package ecsgo
 
-import "reflect"
+import (
+	"math"
+	"reflect"
+)
 
 // isystem system interface
 type isystem interface {
@@ -41,6 +44,7 @@ func newBaseSystem(r *Registry, time Ticktime, isTemporary bool) *baseSystem {
 		readonlyMap: make(map[reflect.Type]bool),
 		isTemp: isTemporary,
 		time: time,
+		priority: math.MaxInt,
 	}
 }
 
@@ -112,16 +116,97 @@ func (s *baseSystem) getPriority() int {
 }
 
 // system non componenet system
-type system struct {
+type nonComponentSystem struct {
 	baseSystem
 	fn          func (r *Registry)
 }
 
-func makeSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry)) isystem {
+func makeNonComponentSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry)) isystem {
+	sys := &nonComponentSystem{
+		baseSystem: *newBaseSystem(r, time, isTemporary),
+		fn: fn,
+	}
+	return sys
+}
+
+// run run system
+func (s *nonComponentSystem) run() {
+	if !s.exceedTickInterval() {
+		return
+	}
+
+	s.fn(s.r)
+	if s.isTemp {
+		s.r.defferredRemovesystem(s.time, s)
+	}
+}
+
+// system non componenet system
+type system struct {
+	baseSystem
+	fn          func (r *Registry, iter *Iterator)
+}
+
+func makeSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
 	sys := &system{
 		baseSystem: *newBaseSystem(r, time, isTemporary),
 		fn: fn,
 	}
+	return sys
+}
+
+func makeSystem1[T any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
+	sys := makeSystem(r, time, isTemporary, fn)
+	var zeroT T
+	sys.addIncludeType(reflect.TypeOf(zeroT))
+	return sys
+}
+
+func makeSystem2[T1, T2 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
+	sys := makeSystem(r, time, isTemporary, fn)
+	var zeroT1 T1
+	var zeroT2 T2
+	sys.addIncludeType(reflect.TypeOf(zeroT1))
+	sys.addIncludeType(reflect.TypeOf(zeroT2))
+	return sys
+}
+
+func makeSystem3[T1, T2, T3 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
+	sys := makeSystem(r, time, isTemporary, fn)
+	var zeroT1 T1
+	var zeroT2 T2
+	var zeroT3 T3
+	sys.addIncludeType(reflect.TypeOf(zeroT1))
+	sys.addIncludeType(reflect.TypeOf(zeroT2))
+	sys.addIncludeType(reflect.TypeOf(zeroT3))
+	return sys
+}
+
+func makeSystem4[T1, T2, T3, T4 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
+	sys := makeSystem(r, time, isTemporary, fn)
+	var zeroT1 T1
+	var zeroT2 T2
+	var zeroT3 T3
+	var zeroT4 T4
+	sys.addIncludeType(reflect.TypeOf(zeroT1))
+	sys.addIncludeType(reflect.TypeOf(zeroT2))
+	sys.addIncludeType(reflect.TypeOf(zeroT3))
+	sys.addIncludeType(reflect.TypeOf(zeroT4))
+	return sys
+}
+
+func makeSystem5[T1, T2, T3, T4, T5 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
+	sys := makeSystem(r, time, isTemporary, fn)
+	var zeroT1 T1
+	var zeroT2 T2
+	var zeroT3 T3
+	var zeroT4 T4
+	var zeroT5 T5
+	sys.addIncludeType(reflect.TypeOf(zeroT1))
+	sys.addIncludeType(reflect.TypeOf(zeroT2))
+	sys.addIncludeType(reflect.TypeOf(zeroT3))
+	sys.addIncludeType(reflect.TypeOf(zeroT4))
+	sys.addIncludeType(reflect.TypeOf(zeroT5))
 	return sys
 }
 
@@ -130,115 +215,59 @@ func (s *system) run() {
 	if !s.exceedTickInterval() {
 		return
 	}
-	s.fn(s.r)
+	
+	tables := s.query()
+	iter := makeIterator(s, s.r, tables)
+	if !iter.IsNil() {
+		s.fn(s.r, iter)
+	}
 	if s.isTemp {
 		s.r.defferredRemovesystem(s.time, s)
 	}
 }
 
-// system1 single value system
-type system1[T any] struct {
-	baseSystem
-	fn func (*Registry, Entity, *T)
-}
-// makeSystem1 add single value system
-func makeSystem1[T any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, entity Entity, t *T)) isystem {
-	var zeroT T
-	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
-		panic(err)
-	}
-	sys := &system1[T]{
-		baseSystem: *newBaseSystem(r, time, isTemporary),
-		fn: fn,
-	}
-	sys.addIncludeType(reflect.TypeOf(zeroT))
-	return sys
+type Iterator struct {
+	s isystem
+	r *Registry
+	tables []*unsafeTable
+	tabIdx int
+	tabIter *tableIter
 }
 
-// run run system
-func (s *system1[T]) run() {
-	if !s.exceedTickInterval() {
-		return
+func makeIterator(s isystem, r *Registry, tables []*unsafeTable) *Iterator {
+	itr := &Iterator{
+		s: s,
+		r: r,
+		tables: tables,
 	}
-	var zeroT T
-	typeT := reflect.TypeOf(zeroT)
-	tables := s.query()
-	for _, t := range tables {
-		for iter := t.iterator(); !iter.isNil(); iter.next() {
-			if !s.r.IsAlive(iter.entity()) {
-				continue
-			}			
-			ptrT := (*T)(iter.get(typeT))
-			if s.isReadonly(typeT) {
-				// copy to temp data
-				zeroT = *ptrT
-				ptrT = &zeroT
+	itr.Next()
+	return itr
+}
+
+func (i *Iterator) Next() {
+	for {
+		if i.tabIter == nil || i.tabIter.isNil() {
+			if i.tabIdx == len(i.tables) {
+				return
 			}
-			s.fn(s.r, iter.entity(), ptrT)
+			i.tabIter = i.tables[i.tabIdx].iterator()
+			i.tabIdx++
+		} else {
+			i.tabIter.next()
+		}
+		if i.tabIter.isNil() {
+			continue
+		}
+		if i.r.IsAlive(i.tabIter.entity()) {
+			return
 		}
 	}
-	if s.isTemp {
-		s.r.defferredRemovesystem(s.time, s)
-	}
 }
 
-// system2 two values system
-type system2[T any, U any] struct {
-	baseSystem
-	fn func (*Registry, Entity, *T, *U)
+func (i *Iterator) IsNil() bool {
+	return i.tabIdx == len(i.tables) && (i.tabIter == nil || i.tabIter.isNil())
 }
 
-// AddSystem2 add two values system
-func makeSystem2[T any, U any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, entity Entity, t *T, u *U)) isystem {
-	var zeroT T
-	var zeroU U
-	if err := checkType(reflect.TypeOf(zeroT)); err != nil {
-		panic(err)
-	}
-	if err := checkType(reflect.TypeOf(zeroU)); err != nil {
-		panic(err)
-	}
-
-	sys := &system2[T, U]{
-		baseSystem: *newBaseSystem(r, time, isTemporary),
-		fn: fn,
-	}
-	sys.addIncludeType(reflect.TypeOf(zeroT))
-	sys.addIncludeType(reflect.TypeOf(zeroU))
-	return sys
-}
-
-// run run system
-func (s *system2[T, U]) run() {
-	if !s.exceedTickInterval() {
-		return
-	}
-	var zeroT T
-	var zeroU U
-	typeT := reflect.TypeOf(zeroT)
-	typeU := reflect.TypeOf(zeroU)
-	tables := s.query()
-	for _, t := range tables {
-		for iter := t.iterator(); !iter.isNil(); iter.next() {
-			if !s.r.IsAlive(iter.entity()) {
-				continue
-			}	
-			ptrT := (*T)(iter.get(typeT))
-			ptrU := (*U)(iter.get(typeU))
-			if s.isReadonly(typeT) {
-				// copy to temp data
-				zeroT = *ptrT
-				ptrT = &zeroT
-			}
-			if s.isReadonly(typeU) {
-				// copy to temp data
-				zeroU = *ptrU
-				ptrU = &zeroU
-			}
-			s.fn(s.r, iter.entity(), ptrT, ptrU)
-		}
-	}
-	if s.isTemp {
-		s.r.defferredRemovesystem(s.time, s)
-	}
+func (i *Iterator) Entity() Entity {
+	return i.tabIter.entity()
 }

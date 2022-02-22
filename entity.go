@@ -5,6 +5,8 @@ type Entity struct {
 	version uint32
 }
 
+var EntityNil = Entity{0, 0}
+
 func newEntity(id uint32, version uint32) Entity {
 	return Entity{id: id, version: version}
 }

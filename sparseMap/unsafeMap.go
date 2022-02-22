@@ -7,7 +7,7 @@ package sparseMap
 import "C"
 import (
 	"unsafe"
-	"constraints"
+	"golang.org/x/exp/constraints"
 	"log"
 )
 
@@ -139,9 +139,7 @@ func (s *UnsafeMap[K]) Erase(id K) {
 }
 
 func (s *UnsafeMap[K]) Free() {
-	C.free(s.dense)
 	s.denseLen = 0
-	s.denseCap = 0
 	s.denseMap = s.denseMap[:0]
 	s.sparse = make([]K, len(s.sparse))
 }

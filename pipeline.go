@@ -1,6 +1,7 @@
 package ecsgo
 
 import (
+	"math"
 	"reflect"
 	"sync"
 )
@@ -20,12 +21,12 @@ func newPipeline() *pipeline {
 
 // pipeNode single dependency line
 type pipeNode struct {
-	prev        *pipeNode
-	next        *pipeNode
-	sysw        []*sysWrapper
-	donech      chan bool
-	readonly    bool
-	maxPriority int
+	prev     *pipeNode
+	next     *pipeNode
+	sysw     []*sysWrapper
+	donech   chan bool
+	readonly bool
+	priority int
 }
 
 // sysWrapper system wrapper for waiting dependent systems done
@@ -53,7 +54,7 @@ func (p *pipeline) addSystem(sys isystem) {
 		inserted := false
 		for node.next != nil {
 			node = node.next
-			if sys.getPriority() > node.maxPriority {
+			if sys.getPriority() < node.priority {
 				if node.readonly && sys.isReadonly(tp) {
 					// read can overlapped
 					node.addSysw(sysw)
@@ -82,6 +83,7 @@ func insertNode(sysw *sysWrapper, readonly bool, prev, next *pipeNode) {
 		sysw:     []*sysWrapper{sysw},
 		donech:   make(chan bool),
 		readonly: readonly,
+		priority: sysw.sys.getPriority(),
 	}
 	prev.next = newNode
 	newNode.prev = prev
@@ -106,6 +108,13 @@ func (p *pipeline) removeSystem(sys isystem) {
 				break
 			}
 		}
+		priority := math.MaxInt
+		for _, s := range n.sysw {
+			if s.sys.getPriority() < priority {
+				priority = s.sys.getPriority()
+			}
+		}
+		n.priority = priority
 		if len(n.sysw) == 0 {
 			if n.prev == nil {
 				panic("n.prev should be not nil as root doesn't have any system")
@@ -153,8 +162,8 @@ func (node *pipeNode) addSysw(sysw *sysWrapper) {
 	// read can overlapped
 	node.sysw = append(node.sysw, sysw)
 	sysw.nodes = append(sysw.nodes, node)
-	if sysw.sys.getPriority() > node.maxPriority {
-		node.maxPriority = sysw.sys.getPriority()
+	if sysw.sys.getPriority() < node.priority {
+		node.priority = sysw.sys.getPriority()
 	}
 }
 

@@ -1,7 +1,7 @@
 package sparseMap
 
 import (
-	"constraints"
+	"golang.org/x/exp/constraints"
 	"log"
 )
 

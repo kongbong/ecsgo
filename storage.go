@@ -80,7 +80,7 @@ func (s *storage) addComponents(ent Entity, cmpInfos []*componentInfo) {
 			panic("entity data is removed")
 		}
 		for tp, off := range getter.typeOffMap {
-			valMap[tp] = unsafe.Add(getter.ptr, off)
+			valMap[tp] = unsafe.Add(getter.ptr, off+1) // Add flag offset
 			types = append(types, tp)
 		}
 	}
@@ -127,4 +127,12 @@ func (s *storage) getValue(ent Entity, tp reflect.Type) unsafe.Pointer {
 		return getter.get(tp)
 	}
 	return nil
+}
+
+func (s *storage) hasType(ent Entity, tp reflect.Type) bool {
+	tb, ok := s.entityMap[ent]
+	if !ok {
+		panic("Entity doesn't have any components")
+	}
+	return tb.hasType(tp)
 }
