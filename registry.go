@@ -1,7 +1,9 @@
 package ecsgo
 
 import (
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,7 +29,7 @@ type Registry struct {
 	defferredAddCmp    map[Entity][]*componentInfo
 	defferredRemoveSys []sysInfo
 	deltaSeconds       float64
-	sysDeltaSeconds    float64
+	sysDeltaSeconds    uint64
 }
 
 // New make new Registry
@@ -78,11 +80,11 @@ func (r *Registry) Release(e Entity) {
 }
 
 func (r *Registry) DeltaSeconds() float64 {
-	return r.sysDeltaSeconds
+	return math.Float64frombits(atomic.LoadUint64(&r.sysDeltaSeconds))
 }
 
 func (r *Registry) setSystemDeltaSeconds(val float64) {
-	r.sysDeltaSeconds = val
+	atomic.StoreUint64(&r.sysDeltaSeconds, math.Float64bits(val))
 }
 
 // Run run systems
