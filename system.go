@@ -1,273 +1,361 @@
 package ecsgo
 
 import (
-	"math"
 	"reflect"
+	"slices"
+	"time"
 )
 
-// isystem system interface
-type isystem interface {
-	
-	SetTickInterval(intervalSecond float64)
-	SetPriority(priority int)
+type ExecutionContext struct {
+	registry  *Registry
+	deltaTime time.Duration
 
-	run()
-	getIncludeTypes() []reflect.Type
-	getDependencyTypes() []reflect.Type
-	getExcludeTypes() []reflect.Type
-	addExcludeType(tp reflect.Type)
-	addIncludeType(tp reflect.Type)
-	addTagType(tp reflect.Type)
-	addDependencyType(tp reflect.Type)
-	makeReadonly(tp reflect.Type)
-	isReadonly(tp reflect.Type) bool
-	isTemporary() bool
-	getPriority() int
+	queryResults []*QueryResult
 }
 
-type baseSystem struct {
-	r               *Registry
-	includeTypes    []reflect.Type
-	dependencyTypes []reflect.Type
-	excludeTypes    []reflect.Type
-	readonlyMap     map[reflect.Type]bool
-	isTemp          bool
-	time            Ticktime
-	intervalSeconds float64
-	elapsedSeconds  float64
-	priority        int
+type QueryResult struct {
+	query         *Query
+	archeTypeList []*ArcheType
 }
 
-func newBaseSystem(r *Registry, time Ticktime, isTemporary bool) *baseSystem {
-	return &baseSystem{
-		r: r,
-		readonlyMap: make(map[reflect.Type]bool),
-		isTemp: isTemporary,
-		time: time,
-		priority: math.MaxInt,
+// Component Query
+type Query struct {
+	includeComponents    []reflect.Type
+	excludeComponents    []reflect.Type
+	optionalComponents   []reflect.Type
+	readonlyComponents   []reflect.Type
+	atleastOneComponents [][]reflect.Type
+
+	interestedArcheTypeList []*ArcheType
+}
+
+type SystemFn func(ctx *ExecutionContext) error
+
+type System struct {
+	registry *Registry
+	name     string
+	priority int
+	fn       SystemFn
+
+	// query
+	queries []*Query
+}
+
+func newSystem(registry *Registry, name string, priority int, fn SystemFn) *System {
+	return &System{
+		registry: registry,
+		name:     name,
+		priority: priority,
+		fn:       fn,
 	}
 }
 
-func (s *baseSystem) getIncludeTypes() []reflect.Type {
-	return s.includeTypes
+func (s *System) execute(deltaTime time.Duration) error {
+	ctx := &ExecutionContext{
+		registry:  s.registry,
+		deltaTime: deltaTime,
+	}
+	for _, q := range s.queries {
+		qr := &QueryResult{
+			query:         q,
+			archeTypeList: q.interestedArcheTypeList,
+		}
+		ctx.queryResults = append(ctx.queryResults, qr)
+	}
+	return s.fn(ctx)
 }
 
-func (s *baseSystem) getDependencyTypes() []reflect.Type {
-	return s.dependencyTypes
+func (s *System) GetName() string {
+	return s.name
 }
 
-func (s *baseSystem) getExcludeTypes() []reflect.Type {
-	return s.excludeTypes
+func (s *System) GetPriority() int {
+	return s.priority
 }
 
-func (s *baseSystem) addExcludeType(tp reflect.Type) {
-	s.excludeTypes = append(s.excludeTypes, tp)
+func (s *System) NewQuery() *Query {
+	q := &Query{}
+	s.queries = append(s.queries, q)
+	return q
 }
 
-func (s *baseSystem) addIncludeType(tp reflect.Type) {
-	s.includeTypes = append(s.includeTypes, tp)
-	s.dependencyTypes = append(s.dependencyTypes, tp)
+func AddReadWriteComponent[T any](q *Query) {
+	var t T
+	ty := reflect.TypeOf(t)
+	if q.hasComponent(ty) {
+		// already added
+		return
+	}
+	q.includeComponents = append(q.includeComponents, ty)
 }
 
-func (s *baseSystem) addTagType(tp reflect.Type) {
-	s.includeTypes = append(s.includeTypes, tp)
+func AddReadonlyComponent[T any](q *Query) {
+	var t T
+	ty := reflect.TypeOf(t)
+	if q.hasComponent(ty) {
+		// already added
+		return
+	}
+	q.includeComponents = append(q.includeComponents, ty)
+	q.readonlyComponents = append(q.readonlyComponents, ty)
 }
 
-func (s *baseSystem) addDependencyType(tp reflect.Type) {
-	s.dependencyTypes = append(s.dependencyTypes, tp)
+func AddExcludeComponent[T any](q *Query) {
+	var t T
+	ty := reflect.TypeOf(t)
+	if q.hasComponent(ty) {
+		// already added
+		return
+	}
+	q.excludeComponents = append(q.excludeComponents, ty)
 }
 
-func (s *baseSystem) makeReadonly(tp reflect.Type) {
-	s.readonlyMap[tp] = true
+func AddOptionalReadWriteComponent[T any](q *Query) {
+	var t T
+	ty := reflect.TypeOf(t)
+	if q.hasComponent(ty) {
+		// already added
+		return
+	}
+	q.optionalComponents = append(q.optionalComponents, ty)
 }
 
-func (s *baseSystem) isReadonly(tp reflect.Type) bool {
-	return s.readonlyMap[tp]
+func AddOptionalReadonlyComponent[T any](q *Query) {
+	var t T
+	ty := reflect.TypeOf(t)
+	if q.hasComponent(ty) {
+		// already added
+		return
+	}
+	q.optionalComponents = append(q.optionalComponents, ty)
+	q.readonlyComponents = append(q.readonlyComponents, ty)
 }
 
-func (s *baseSystem) query() []*unsafeTable {
-	return s.r.storage.query(s.includeTypes, s.excludeTypes)
+func (q *Query) AtLeastOneOfThem(tps []reflect.Type) {
+	q.atleastOneComponents = append(q.atleastOneComponents, tps)
 }
 
-func (s *baseSystem) isTemporary() bool {
-	return s.isTemp
+func (q *Query) AtLeastOneOfThemReadonly(tps []reflect.Type) {
+	q.atleastOneComponents = append(q.atleastOneComponents, tps)
+	q.readonlyComponents = append(q.readonlyComponents, tps...)
 }
 
-func (s *baseSystem) SetTickInterval(intervalSeconds float64) {
-	s.intervalSeconds = intervalSeconds
+func (s *System) hasComponent(ty reflect.Type) bool {
+	for _, q := range s.queries {
+		if q.hasComponent(ty) {
+			return true
+		}
+	}
+	return false
 }
 
-func (s *baseSystem) exceedTickInterval() bool {
-	s.elapsedSeconds += s.r.deltaSeconds
-	if s.elapsedSeconds >= s.intervalSeconds {
-		s.r.setSystemDeltaSeconds(s.elapsedSeconds)
-		s.elapsedSeconds = 0
+func (q *Query) hasComponent(ty reflect.Type) bool {
+	if q.isInterestComponent(ty) {
+		return true
+	}
+	if slices.Contains(q.excludeComponents, ty) {
 		return true
 	}
 	return false
 }
 
-func (s *baseSystem) SetPriority(priority int) {
-	s.priority = priority
-}
-
-func (s *baseSystem) getPriority() int {
-	return s.priority
-}
-
-// system non componenet system
-type nonComponentSystem struct {
-	baseSystem
-	fn          func (r *Registry)
-}
-
-func makeNonComponentSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry)) isystem {
-	sys := &nonComponentSystem{
-		baseSystem: *newBaseSystem(r, time, isTemporary),
-		fn: fn,
-	}
-	return sys
-}
-
-// run run system
-func (s *nonComponentSystem) run() {
-	if !s.exceedTickInterval() {
-		return
-	}
-
-	s.fn(s.r)
-	if s.isTemp {
-		s.r.defferredRemovesystem(s.time, s)
-	}
-}
-
-// system non componenet system
-type system struct {
-	baseSystem
-	fn          func (r *Registry, iter *Iterator)
-}
-
-func makeSystem(r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
-	sys := &system{
-		baseSystem: *newBaseSystem(r, time, isTemporary),
-		fn: fn,
-	}
-	return sys
-}
-
-func makeSystem1[T any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
-	sys := makeSystem(r, time, isTemporary, fn)
-	var zeroT T
-	sys.addIncludeType(reflect.TypeOf(zeroT))
-	return sys
-}
-
-func makeSystem2[T1, T2 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
-	sys := makeSystem(r, time, isTemporary, fn)
-	var zeroT1 T1
-	var zeroT2 T2
-	sys.addIncludeType(reflect.TypeOf(zeroT1))
-	sys.addIncludeType(reflect.TypeOf(zeroT2))
-	return sys
-}
-
-func makeSystem3[T1, T2, T3 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
-	sys := makeSystem(r, time, isTemporary, fn)
-	var zeroT1 T1
-	var zeroT2 T2
-	var zeroT3 T3
-	sys.addIncludeType(reflect.TypeOf(zeroT1))
-	sys.addIncludeType(reflect.TypeOf(zeroT2))
-	sys.addIncludeType(reflect.TypeOf(zeroT3))
-	return sys
-}
-
-func makeSystem4[T1, T2, T3, T4 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
-	sys := makeSystem(r, time, isTemporary, fn)
-	var zeroT1 T1
-	var zeroT2 T2
-	var zeroT3 T3
-	var zeroT4 T4
-	sys.addIncludeType(reflect.TypeOf(zeroT1))
-	sys.addIncludeType(reflect.TypeOf(zeroT2))
-	sys.addIncludeType(reflect.TypeOf(zeroT3))
-	sys.addIncludeType(reflect.TypeOf(zeroT4))
-	return sys
-}
-
-func makeSystem5[T1, T2, T3, T4, T5 any](r *Registry, time Ticktime, isTemporary bool, fn func (r *Registry, iter *Iterator)) isystem {
-	sys := makeSystem(r, time, isTemporary, fn)
-	var zeroT1 T1
-	var zeroT2 T2
-	var zeroT3 T3
-	var zeroT4 T4
-	var zeroT5 T5
-	sys.addIncludeType(reflect.TypeOf(zeroT1))
-	sys.addIncludeType(reflect.TypeOf(zeroT2))
-	sys.addIncludeType(reflect.TypeOf(zeroT3))
-	sys.addIncludeType(reflect.TypeOf(zeroT4))
-	sys.addIncludeType(reflect.TypeOf(zeroT5))
-	return sys
-}
-
-// run run system
-func (s *system) run() {
-	if !s.exceedTickInterval() {
-		return
-	}
-	
-	tables := s.query()
-	iter := makeIterator(s, s.r, tables)
-	if !iter.IsNil() {
-		s.fn(s.r, iter)
-	}
-	if s.isTemp {
-		s.r.defferredRemovesystem(s.time, s)
-	}
-}
-
-type Iterator struct {
-	s isystem
-	r *Registry
-	tables []*unsafeTable
-	tabIdx int
-	tabIter *tableIter
-}
-
-func makeIterator(s isystem, r *Registry, tables []*unsafeTable) *Iterator {
-	itr := &Iterator{
-		s: s,
-		r: r,
-		tables: tables,
-	}
-	itr.Next()
-	return itr
-}
-
-func (i *Iterator) Next() {
-	for {
-		if i.tabIter == nil || i.tabIter.isNil() {
-			if i.tabIdx == len(i.tables) {
-				return
-			}
-			i.tabIter = i.tables[i.tabIdx].iterator()
-			i.tabIdx++
-		} else {
-			i.tabIter.next()
+func (s *System) isInterestComponent(ty reflect.Type) bool {
+	for _, q := range s.queries {
+		if q.isInterestComponent(ty) {
+			return true
 		}
-		if i.tabIter.isNil() {
+	}
+	return false
+}
+
+func (q *Query) isInterestComponent(ty reflect.Type) bool {
+	if slices.Contains(q.includeComponents, ty) {
+		return true
+	}
+	if slices.Contains(q.optionalComponents, ty) {
+		return true
+	}
+	for _, atleast := range q.atleastOneComponents {
+		if slices.Contains(atleast, ty) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *System) getInterestComponentCount() int {
+	cnt := 0
+	for _, q := range s.queries {
+		cnt += q.getInterestComponentCount()
+	}
+	return cnt
+}
+
+func (q *Query) getInterestComponentCount() int {
+	cnt := len(q.includeComponents) + len(q.optionalComponents)
+	for _, atleast := range q.atleastOneComponents {
+		cnt += len(atleast)
+	}
+	return cnt
+}
+
+func (s *System) dependent(other *System) bool {
+	for _, q := range s.queries {
+		for _, otherQ := range other.queries {
+			if q.dependent(otherQ) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (q *Query) dependent(other *Query) bool {
+	for _, t := range q.includeComponents {
+		if other.isInterestComponent(t) {
+			if !slices.Contains(q.readonlyComponents, t) || !slices.Contains(other.readonlyComponents, t) {
+				return true
+			}
+		}
+	}
+	for _, t := range q.optionalComponents {
+		if other.isInterestComponent(t) {
+			if !slices.Contains(q.readonlyComponents, t) || !slices.Contains(other.readonlyComponents, t) {
+				return true
+			}
+		}
+	}
+	for _, atleast := range q.atleastOneComponents {
+		for _, t := range atleast {
+			if other.isInterestComponent(t) {
+				if !slices.Contains(q.readonlyComponents, t) || !slices.Contains(other.readonlyComponents, t) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (s *System) addArcheTypeIfInterest(archeType *ArcheType) bool {
+	var added bool
+	for _, q := range s.queries {
+		if q.addArcheTypeIfInterest(archeType) {
+			added = true
+		}
+	}
+	return added
+}
+
+func (q *Query) addArcheTypeIfInterest(archeType *ArcheType) bool {
+	for _, t := range q.includeComponents {
+		if !archeType.hasComponent(t) {
+			return false
+		}
+	}
+	for _, t := range q.excludeComponents {
+		if archeType.hasComponent(t) {
+			return false
+		}
+	}
+	for _, atleast := range q.atleastOneComponents {
+		found := false
+		for _, t := range atleast {
+			if archeType.hasComponent(t) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	q.interestedArcheTypeList = append(q.interestedArcheTypeList, archeType)
+	return true
+}
+
+func (c *ExecutionContext) GetResgiry() *Registry {
+	return c.registry
+}
+
+func (c *ExecutionContext) CreateEntity() EntityId {
+	return c.registry.CreateEntity()
+}
+
+func (c *ExecutionContext) GetDeltaTime() time.Duration {
+	return c.deltaTime
+}
+
+func (c *ExecutionContext) GetQueryResultCount() int {
+	return len(c.queryResults)
+}
+
+func (c *ExecutionContext) GetQueryResult(idx int) *QueryResult {
+	return c.queryResults[idx]
+}
+
+func (qr *QueryResult) GetArcheTypeCount() int {
+	return len(qr.archeTypeList)
+}
+
+func (qr *QueryResult) GetArcheType(idx int) *ArcheType {
+	return qr.archeTypeList[idx]
+}
+
+func (qr *QueryResult) ForeachEntities(fn func(accessor *ArcheTypeAccessor) error) error {
+	for _, archeType := range qr.archeTypeList {
+		if archeType.getEntityCount() == 0 {
 			continue
 		}
-		if i.r.IsAlive(i.tabIter.entity()) {
-			return
+		err := archeType.Foreach(func(accessor *ArcheTypeAccessor) error {
+			err := fn(accessor)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
-func (i *Iterator) IsNil() bool {
-	return i.tabIdx == len(i.tables) && (i.tabIter == nil || i.tabIter.isNil())
+func GetComponent[T any](c *ExecutionContext, entityId EntityId) *T {
+	var t T
+	for i := 0; i < c.GetQueryResultCount(); i++ {
+		qr := c.GetQueryResult(i)
+		for j := 0; j < qr.GetArcheTypeCount(); j++ {
+			a := qr.GetArcheType(j)
+			if a == nil {
+				continue
+			}
+			if a.hasComponent(reflect.TypeOf(t)) {
+				valT := getArcheTypeComponent[T](a, entityId)
+				if valT != nil {
+					return valT
+				}
+			}
+		}
+	}
+	return nil
 }
 
-func (i *Iterator) Entity() Entity {
-	return i.tabIter.entity()
+func HasComponent[T any](c *ExecutionContext, entityId EntityId) bool {
+	var t T
+	for i := 0; i < c.GetQueryResultCount(); i++ {
+		qr := c.GetQueryResult(i)
+		for j := 0; j < qr.GetArcheTypeCount(); j++ {
+			a := qr.GetArcheType(j)
+			if a == nil {
+				continue
+			}
+			if a.hasComponent(reflect.TypeOf(t)) {
+				if a.hasEntity(entityId) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

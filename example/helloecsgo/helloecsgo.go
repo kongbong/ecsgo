@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/kongbong/ecsgo"
 )
@@ -24,54 +26,64 @@ type HP struct {
 type EnemyTag struct{}
 
 func main() {
-	registry := ecsgo.New()
-	defer registry.Free() // need to call before remove registry to free C malloc memory
+	registry := ecsgo.NewRegistry()
 
-	sys := ecsgo.AddSystem1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
-		log.Println("This should not called as Entity has Velocity component")
+	sys1 := registry.AddSystem("VelocitySystem", 0, func(ctx *ecsgo.ExecutionContext) error {
+		qr := ctx.GetQueryResult(0)
+		log.Println("This system should have not any archtype", qr.GetArcheTypeCount())
+		return nil
 	})
-	ecsgo.Exclude[EnemyTag](sys)
+	q1 := sys1.NewQuery()
+	ecsgo.AddReadWriteComponent[Velocity](q1)
+	ecsgo.AddExcludeComponent[EnemyTag](q1)
 
-	ecsgo.PostTask1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
-		for ; !iter.IsNil(); iter.Next() {
-			vel := ecsgo.Get[Velocity](iter)
-			log.Println("This is one time called system", iter.Entity(), vel)
-		}
-		
+	o := registry.AddObserver("AddVelocityObserver", func(ctx *ecsgo.ObserverContext) error {
+		vel := ecsgo.GetComponentObserver[Velocity](ctx)
+		log.Println("This is one time called system", ctx.GetEntityId(), vel)
+		return nil
 	})
+	ecsgo.AddComponentToObserver[Velocity](o)
 
-	sys = ecsgo.AddSystem1[Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
-		for ; !iter.IsNil(); iter.Next() {
-			vel := ecsgo.Get[Velocity](iter)
-			log.Println("Velocity system", iter.Entity(), vel)
-			// Velocity value of Entity is not changed as it is Readonly
-			vel.X++
-			vel.Y++
-		}
+	sys2 := registry.AddSystem("VelocitySystem2", 0, func(ctx *ecsgo.ExecutionContext) error {
+		qr := ctx.GetQueryResult(0)
+		qr.ForeachEntities(func(accessor *ecsgo.ArcheTypeAccessor) error {
+			vel := ecsgo.GetComponentByAccessor[Velocity](accessor)
+			log.Println("VelocitySystem2", accessor.GetEntityId(), vel)
+			return nil
+		})
+		return nil
 	})
-	ecsgo.Exclude[HP](sys)
-	ecsgo.Readonly[Velocity](sys)
+	q2 := sys2.NewQuery()
+	ecsgo.AddExcludeComponent[HP](q2)
+	ecsgo.AddReadonlyComponent[Velocity](q2)
 
-	sys = ecsgo.AddSystem2[Position, Velocity](registry, ecsgo.OnTick, func(r *ecsgo.Registry, iter *ecsgo.Iterator) {
-		for ; !iter.IsNil(); iter.Next() {
-			pos := ecsgo.Get[Position](iter)
-			vel := ecsgo.Get[Velocity](iter)
-			log.Println("Position, Velocity system", iter.Entity(), pos, vel, r.DeltaSeconds())
-			// Position value is not changed only Velocity value is changed
+	sys3 := registry.AddSystem("PositionAndVelocity", 0, func(ctx *ecsgo.ExecutionContext) error {
+		qr := ctx.GetQueryResult(0)
+		qr.ForeachEntities(func(accessor *ecsgo.ArcheTypeAccessor) error {
+			pos := ecsgo.GetComponentByAccessor[Position](accessor)
+			vel := ecsgo.GetComponentByAccessor[Velocity](accessor)
+			log.Println("Position, Velocity system", accessor.GetEntityId(), pos, vel, ctx.GetDeltaTime())
 			pos.X++
 			pos.Y++
 			vel.X++
 			vel.Y++
-		}
+			return nil
+		})
+		return nil
 	})
-	sys.SetTickInterval(1)
-	ecsgo.Tag[EnemyTag](sys)
-	ecsgo.Readonly[Position](sys)
+	q3 := sys3.NewQuery()
+	ecsgo.AddReadWriteComponent[Position](q3)
+	ecsgo.AddReadWriteComponent[Velocity](q3)
+	ecsgo.AddReadonlyComponent[EnemyTag](q3)
 
-	entity := registry.Create()
-	ecsgo.AddComponent(registry, entity, &Position{10, 10})
-	ecsgo.AddComponent(registry, entity, &Velocity{20, 20})
-	ecsgo.AddTag[EnemyTag](registry, entity)
+	entity := registry.CreateEntity()
+	ecsgo.AddComponent(registry, entity, Position{10, 10})
+	ecsgo.AddComponent(registry, entity, Velocity{20, 20})
+	ecsgo.AddComponent(registry, entity, EnemyTag{})
 
-	registry.Run(ecsgo.FPS(10), ecsgo.FixedTick(true))
+	ctx := context.Background()
+	for i := 0; i < 10; i++ {
+		registry.Tick(time.Second, ctx)
+		time.Sleep(time.Second)
+	}
 }
